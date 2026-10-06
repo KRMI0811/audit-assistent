@@ -128,11 +128,17 @@ Regeln
 1. Erfinde nichts. Zitate müssen wörtlich aus den Nachweisen stammen.
 2. Fehlt ein Nachweis ganz, lass die Liste nachweise leer und begründe das.
 3. Schreibe die Begründung in höchstens drei klaren Sätzen.
-4. Schlage für jeden Einwand eine konkrete Prüfung vor Ort vor.
+4. Schlage für jeden Einwand zwei bis drei konkrete Prüfungen vor Ort vor.
+5. Schätze das Risiko im externen Zertifizierungsaudit ein. Hauptabweichung bedeutet, dass eine
+   Normanforderung systematisch oder vollständig nicht erfüllt ist. Nebenabweichung bedeutet
+   einen Einzelfall oder eine formale Lücke. Kein Risiko bedeutet, dass ein externer Auditor
+   dies nicht beanstanden würde.
 Schema
 {"einwaende": [{"id": "E1", "ziel": "T1", "typ": "...", "begruendung": "...",
  "nachweise": [{"dokument": "...", "zitat": "..."}], "schwere": "hoch|mittel|gering",
- "pruefung_vor_ort": "..."}]}"""
+ "pruefung_vor_ort": ["...", "..."],
+ "zertifizierungsrisiko": {"klassifizierung": "Hauptabweichung|Nebenabweichung|kein Risiko",
+ "prognose": "...", "konsequenz": "...", "dringlichkeit": "sehr hoch|hoch|mittel|gering"}}]}"""
 
 ERWIDERUNG_SYSTEM = """Du bist das KONSTRUKTIONSTEAM. Erwidere auf jeden Einwand sachlich.
 Gestehe Einwände zu, wenn die Nachweise sie stützen. Nutze nur wörtliche Zitate.
@@ -184,6 +190,18 @@ AGENTEN = [
      "Leitet je bestätigter Feststellung Ursachenhypothese, Sofort- und Korrekturmassnahme, "
      "Verantwortung, Frist und Wirksamkeitsnachweis ab.", MASSNAHMEN_SYSTEM,
      "Falsifikationsmodell")]
+
+AGENT_STANDARD = {s: (n, z) for s, n, _, z, _, _ in AGENTEN}
+
+
+def agent_name(audit: dict, schluessel: str) -> str:
+    eigen = (audit.get("agenten") or {}).get(schluessel, {}).get("name", "").strip()
+    return eigen or AGENT_STANDARD.get(schluessel, ("", ""))[0]
+
+
+def agent_rolle(audit: dict, schluessel: str) -> str:
+    return (audit.get("agenten") or {}).get(schluessel, {}).get("rolle", "")
+
 
 URTEILE = ["Ausgeräumt", "Bestätigt: Abweichung", "Bestätigt: Verbesserungspotenzial",
            "Offen: vor Ort prüfen"]
@@ -277,6 +295,13 @@ def json_aus_text(text: str):
 
 def llm_json(modell: str, system: str, nutzer: str, audit: dict, rolle: str = ""):
     """Anfrage an die OpenAI-kompatible Schnittstelle, bei Bedarf als Datenstrom."""
+    name = agent_name(audit, rolle)
+    eigene_rolle = agent_rolle(audit, rolle).strip()
+    if name:
+        system = f"Dein Name in diesem Audit ist {name}.\n" + system
+    if eigene_rolle:
+        system += ("\n\nROLLENVERSTÄNDNIS, das der Auditor für dich festgelegt hat:\n"
+                   + eigene_rolle)
     zusatz = (audit.get("prompt_zusatz") or {}).get(rolle, "").strip()
     if zusatz:
         system += ("\n\nZUSÄTZLICHE ANWEISUNG DES AUDITORS. Sie ergänzt die Regeln oben und "
@@ -784,8 +809,8 @@ elif bereich.startswith("Do"):
             st.markdown(f"{name} · {'erledigt' if fertig else 'offen'}")
 
     t1, t2, t3, t4, t5, t6 = st.tabs(
-        ["1 Vorbereitung", "2 Durchführung", "3 Dialektische Prüfung", "4 Urteil",
-         "5 Bericht", "6 Massnahmen"])
+        ["1 Vorbereitung (Plan)", "2 Durchführung (Do)", "3 Prüfung (Check)",
+         "4 Urteil (Check)", "5 Bericht (Check)", "6 Massnahmen (Act)"])
 
     # ---------------- 1 Vorbereitung (Plan)
     with t1:
@@ -840,6 +865,36 @@ elif bereich.startswith("Do"):
                     st.markdown("**Diese Unterlagen sollten Sie bereitstellen**")
                     for n in a["typische_nachweise"]:
                         st.markdown(f"- {n}")
+        st.divider()
+        st.markdown("**Auditteam zusammenstellen**")
+        st.caption("Jede Rolle ist ein eigener Agent. Sie können die Teams umbenennen, ihr "
+                   "Rollenverständnis schärfen und eine zusätzliche Anweisung mitgeben. "
+                   "Das dialektische Prinzip bleibt erhalten, denn ein Team baut den Nachweis "
+                   "und ein zweites greift ihn an.")
+        audit.setdefault("agenten", {})
+        for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
+            eintrag = audit["agenten"].setdefault(schluessel, {"name": "", "rolle": ""})
+            with st.container(border=True):
+                st.markdown(f"**{standardname}** · Phase {phase} · {modell}")
+                st.caption(zweck)
+                s1, s2 = st.columns([1, 2])
+                eintrag["name"] = s1.text_input(
+                    "Name dieses Teams", value=eintrag.get("name", ""),
+                    key=f"an_{audit['id']}_{schluessel}", placeholder=standardname)
+                eintrag["rolle"] = s2.text_area(
+                    "Rollenverständnis", value=eintrag.get("rolle", ""), height=70,
+                    key=f"ar_{audit['id']}_{schluessel}",
+                    placeholder="Beispiel: Du bist ein erfahrener Auditor aus der Medizintechnik "
+                                "und legst besonderen Wert auf Rückverfolgbarkeit.")
+                audit["prompt_zusatz"][schluessel] = st.text_area(
+                    "Zusätzliche Anweisung für dieses Audit",
+                    value=audit["prompt_zusatz"].get(schluessel, ""), height=70,
+                    key=f"pz_{audit['id']}_{schluessel}",
+                    placeholder="Beispiel: Achte besonders auf Fristen und auf Dokumente ohne "
+                                "Freigabevermerk.")
+                with st.expander("Grundanweisung dieses Teams anzeigen"):
+                    st.code(prompt, language="text")
+
         if audit.get("kriterien"):
             zeilen = [f"# Auditplan {audit['titel']}", "",
                       f"Termin {audit['termin']}", f"Prozess {audit['prozess']}",
@@ -901,25 +956,20 @@ elif bereich.startswith("Do"):
 
     # ---------------- 3 Dialektische Pruefung (Check)
     with t3:
-        st.caption("Check. Ein Team baut den Konformitätsnachweis, ein zweites greift ihn an. "
+        st.caption("Check. Ein Team baut den Konformitätsnachweis, ein zweites prüft ihn gegen. "
                    "Das Ergebnis ist eine Liste begründeter Zweifel, über die Sie im nächsten "
                    "Reiter entscheiden.")
 
-        with st.expander("Die Agententeams ansehen und Anweisungen ergänzen"):
-            st.caption("Hier sehen Sie, welche Rolle jedes Team hat und mit welcher Anweisung "
-                       "es arbeitet. Ihre Ergänzung wird an die Anweisung angehängt und gilt "
-                       "für dieses Audit. Sie kann die Grundregeln nicht aufheben.")
-            for schluessel, name, phase, zweck, prompt, modell in AGENTEN:
-                with st.container(border=True):
-                    st.markdown(f"**{name}** · Phase {phase} · {modell}")
-                    st.write(zweck)
-                    audit["prompt_zusatz"][schluessel] = st.text_area(
-                        "Eigene Ergänzung für dieses Team", key=f"pz_{audit['id']}_{schluessel}",
-                        value=audit["prompt_zusatz"].get(schluessel, ""), height=70,
-                        placeholder="Beispiel: Achte besonders auf Fristen und auf "
-                                    "Dokumente ohne Freigabevermerk.")
-                    with st.expander("Grundanweisung dieses Teams anzeigen"):
-                        st.code(prompt, language="text")
+        with st.expander("Welche Teams hier arbeiten"):
+            for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
+                if phase != "Check":
+                    continue
+                st.markdown(f"**{agent_name(audit, schluessel)}** · {modell}")
+                st.caption(zweck)
+                if agent_rolle(audit, schluessel):
+                    st.caption("Rollenverständnis · " + agent_rolle(audit, schluessel))
+            st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie im Reiter "
+                       "Vorbereitung ein.")
 
         if not quellen_sammeln(audit):
             st.warning("Bitte zuerst im Reiter Durchführung Nachweise erfassen.")
@@ -974,54 +1024,122 @@ elif bereich.startswith("Do"):
                 st.markdown(LEGENDE)
 
             urteile = audit.get("urteile", {})
+            risiko_zeichen = {"hauptabweichung": "🔴", "nebenabweichung": "🟡",
+                              "kein risiko": "🟢"}
             for nr, erg in audit.get("analysen", {}).items():
                 einwaende_abschnitt = erg.get("einwaende", {}).get("einwaende", [])
                 erwid = {x.get("einwand"): x
                          for x in erg.get("erwiderungen", {}).get("erwiderungen", [])}
                 zeichen, lage = ampel_abschnitt(erg, urteile)
                 with st.container(border=True):
-                    st.markdown(f"### {zeichen} Abschnitt {nr} {erg.get('titel', '')}")
-                    st.markdown(f"**Ergebnis der Nachweisprüfung** · {lage}")
-                    st.caption("Das ist der Befund des Systems auf Basis der Unterlagen. "
-                               "Die Feststellung treffen Sie im Reiter Urteil.")
-                    with st.expander("Was die Norm hier verlangt"):
-                        st.write(erg.get("anforderung", ""))
+                    st.markdown(f"## {zeichen} Abschnitt {nr} {erg.get('titel', '')}")
+                    st.markdown("**1 Normforderung (Soll-Zustand)**")
+                    st.write(erg.get("anforderung", ""))
+                    st.markdown(f"**Gesamtbefund des Systems** · {zeichen} {lage}")
+                    st.caption("Befund des Systems auf Basis der Unterlagen. Die Feststellung "
+                               "treffen Sie im Reiter Urteil.")
                     for t in erg.get("fall", {}).get("teilaussagen", []):
                         z, kurz = ampel_teilaussage(t, einwaende_abschnitt, urteile)
                         zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
-                        st.markdown(f"**{z} {t.get('pruefpunkt') or t.get('aussage')}**  \n"
-                                    f"{kurz} · {len(t.get('nachweise', []))} Nachweise · "
-                                    f"{len(zweifel)} Zweifel")
-                        with st.expander("Nachvollziehen"):
-                            st.markdown(f"**Befund des Konstruktionsteams**  \n{t.get('aussage')}")
-                            st.caption(t.get("argument", ""))
-                            st.markdown("**Nachweise aus Ihren Unterlagen**")
-                            nachweise_anzeigen(t.get("nachweise"),
-                                               "Keine Nachweise gefunden. Das ist der Grund "
-                                               "für die rote Ampel.")
-                            if t.get("annahmen"):
-                                st.markdown("**Behauptungen ohne Nachweis**")
-                                for a in t["annahmen"]:
-                                    st.markdown(f"- {a}")
-                                st.caption("Solche Punkte können Sie im Gespräch vor Ort klären.")
+                        titel = t.get("pruefpunkt") or t.get("aussage") or t.get("id")
+                        with st.expander(f"{z} Prüfpunkt · {titel}", expanded=False):
+
+                            st.markdown("**2 Audit-Befund und Status**")
+                            meine = [urteile.get(e["id"], {}).get("urteil") for e in zweifel]
+                            meine = [m for m in meine if m]
+                            belegte = sum(1 for n in t.get("nachweise", [])
+                                          if n.get("verifiziert"))
+                            st.markdown(
+                                f"- System-Befund · {z} {kurz}\n"
+                                f"- Datenbasis · {belegte} von {len(t.get('nachweise', []))} "
+                                f"Zitaten in den Unterlagen gefunden, {len(zweifel)} begründete "
+                                f"Zweifel, {len(t.get('annahmen', []))} Behauptungen ohne Nachweis\n"
+                                f"- Ihr Urteil · "
+                                + (", ".join(sorted(set(meine))) if meine
+                                   else "noch nicht entschieden"))
+
+                            st.markdown("**3 Analyse und Argumentation (Ist-Zustand)**")
+                            st.markdown(f"*Sichtweise {agent_name(audit, 'pro')}*")
+                            st.write(t.get("aussage", ""))
+                            if t.get("argument"):
+                                st.caption(t["argument"])
+                            st.markdown(f"*Sichtweise {agent_name(audit, 'contra')}*")
                             if zweifel:
-                                st.markdown("**Zweifel des Falsifikationsteams**")
+                                for e in zweifel:
+                                    st.write(e.get("begruendung", ""))
+                                    kurz_e = (erwid.get(e["id"].split("-", 1)[-1])
+                                              or erwid.get(e["id"]))
+                                    if kurz_e:
+                                        st.caption(
+                                            f"Erwiderung {agent_name(audit, 'erwiderung')} · "
+                                            + ("zugestanden · " if kurz_e.get("zugestanden")
+                                               else "") + str(kurz_e.get("erwiderung", "")))
+                            else:
+                                st.write("Kein Widerspruch gegen diesen Prüfpunkt.")
+
+                            st.markdown("**4 Dokumentenprüfung (die Beweise)**")
+                            if not t.get("nachweise"):
+                                st.markdown("- Kein Dokument eingereicht, das diesen Prüfpunkt "
+                                            "belegt. Das ist der Grund für die rote Ampel.")
+                            for n in t.get("nachweise", []):
+                                if n.get("verifiziert"):
+                                    st.markdown(
+                                        f"- Dokument · **{n.get('dokument', '')}**  \n"
+                                        f"  Status · 🟢 verwendbar  \n"
+                                        f"  Zitat · {n.get('zitat', '')}")
+                                else:
+                                    st.markdown(
+                                        f"- Dokument · **{n.get('dokument', '')}**  \n"
+                                        f"  Status · 🔴 nicht verwendbar  \n"
+                                        f"  Grund · Das zitierte Textstück wurde im Dokument "
+                                        f"nicht gefunden. Es gibt dafür keinen schriftlichen "
+                                        f"Nachweis.")
+                            for a in t.get("annahmen", []):
+                                st.markdown(f"- Behauptung ohne Nachweis · {a}")
+
+                            st.markdown("**5 Audit-Zweifel (Risikoanalyse der Unterlagen)**")
+                            if not zweifel:
+                                st.markdown("- Keine.")
                             for e in zweifel:
-                                st.markdown(f"**{e['id']}** · {TYPEN.get(e.get('typ'), e.get('typ'))} "
-                                            f"· Schwere {e.get('schwere')}")
-                                st.write(e.get("begruendung"))
+                                schwere = {"hoch": "🔴 hoch", "mittel": "🟡 mittel",
+                                           "gering": "🟢 gering"}.get(e.get("schwere"),
+                                                                     e.get("schwere", ""))
+                                st.markdown(
+                                    f"- ID · `{e.get('id')}`  \n"
+                                    f"  Art · {TYPEN.get(e.get('typ'), e.get('typ'))}  \n"
+                                    f"  Schweregrad · {schwere}  \n"
+                                    f"  Begründung · {e.get('begruendung', '')}")
                                 nachweise_anzeigen(e.get("nachweise"),
-                                                   "Kein Gegenbeleg, der Einwand stützt sich "
+                                                   "Kein Gegenbeleg. Der Zweifel stützt sich "
                                                    "auf das Fehlen eines Nachweises.")
-                                kurz_e = erwid.get(e["id"].split("-", 1)[-1]) or erwid.get(e["id"])
-                                if kurz_e:
-                                    st.markdown("Erwiderung des Konstruktionsteams · "
-                                                + ("zugestanden · " if kurz_e.get("zugestanden")
-                                                   else "")
-                                                + str(kurz_e.get("erwiderung")))
-                                st.caption(f"Vorschlag Prüfung vor Ort · {e.get('pruefung_vor_ort')}")
-                                u = urteile.get(e["id"], {}).get("urteil")
-                                st.caption(f"Ihr Urteil · {u or 'noch offen'}")
+
+                            st.markdown("**6 Empfehlung für die Prüfung vor Ort**")
+                            schritte_vo = []
+                            for e in zweifel:
+                                v = e.get("pruefung_vor_ort")
+                                schritte_vo += v if isinstance(v, list) else ([v] if v else [])
+                            if schritte_vo:
+                                for i, v in enumerate(schritte_vo, start=1):
+                                    st.markdown(f"{i}. {v}")
+                            else:
+                                st.markdown("Keine besondere Prüfung vorgeschlagen.")
+
+                            st.markdown("**7 Risiko im externen Zertifizierungsaudit**")
+                            risiken = [e.get("zertifizierungsrisiko") for e in zweifel
+                                       if isinstance(e.get("zertifizierungsrisiko"), dict)]
+                            if not risiken:
+                                st.caption("Das Falsifikationsteam hat dazu nichts geliefert. "
+                                           "Schätzen Sie es im Urteil selbst ein.")
+                            for r in risiken:
+                                klass = str(r.get("klassifizierung", ""))
+                                zr = risiko_zeichen.get(klass.lower(), "⚪")
+                                st.markdown(
+                                    f"- Klassifizierung · {zr} {klass}  \n"
+                                    f"  Prognose · {r.get('prognose', '')}  \n"
+                                    f"  Konsequenz · {r.get('konsequenz', '')}  \n"
+                                    f"  Dringlichkeit · {r.get('dringlichkeit', '')}")
+                            st.caption("Diese Einschätzung ist eine Prognose des Systems und "
+                                       "bindet keine Zertifizierungsstelle.")
                     if st.button(f"Abschnitt {nr} erneut prüfen", key=f"rm_{nr}"):
                         del audit["analysen"][nr]
                         st.rerun()
@@ -1078,7 +1196,14 @@ elif bereich.startswith("Do"):
                             nachweise_anzeigen(kurz.get("nachweise"), "Kein weiterer Nachweis.")
                         else:
                             st.write("keine Erwiderung")
-                    st.caption(f"Vorschlag Prüfung vor Ort · {e.get('pruefung_vor_ort')}")
+                    v = e.get("pruefung_vor_ort")
+                    v = v if isinstance(v, list) else ([v] if v else [])
+                    if v:
+                        st.caption("Vorschlag Prüfung vor Ort · " + " | ".join(str(x) for x in v))
+                    r = e.get("zertifizierungsrisiko")
+                    if isinstance(r, dict):
+                        st.caption(f"Prognose externes Audit · {r.get('klassifizierung', '')} · "
+                                   f"{r.get('konsequenz', '')}")
                     idx = URTEILE.index(alt["urteil"]) if alt.get("urteil") in URTEILE else None
                     urteil = st.radio("Ihr Urteil", URTEILE, key=f"u_{eid}", index=idx,
                                       horizontal=True)
