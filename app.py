@@ -1,12 +1,13 @@
 """
 Audit-Assistent Qualitaetsmanagement (Webversion)
-Oberflaeche: Streamlit Community Cloud
-Sprachmodell: OpenAI-kompatible Schnittstelle (xAI, Public AI oder anderer Anbieter)
+Internes Audit nach ISO 9001 entlang des PDCA-Zyklus.
 
-Ablauf: Das System bereitet das interne Audit weitgehend selbsttaetig vor und prueft es.
-Konstruktionsteam baut den Konformitaetsnachweis, Falsifikationsteam greift ihn an,
-Massnahmenteam leitet Verbesserungen ab. Der Auditor entscheidet als Richter ueber
-jeden Zweifel. Diese Entscheidung bleibt beim Menschen (ISO 19011).
+Plan   Auditprogramm und Auditvorbereitung
+Do     Durchfuehrung, Sammeln objektiver Nachweise
+Check  Dialektische Pruefung durch zwei Agententeams, Urteil des Auditors, Bericht
+Act    Korrekturmassnahmen und Nachverfolgung der Wirksamkeit
+
+Die Agenten bereiten vor und pruefen. Ueber jede Feststellung entscheidet der Auditor.
 """
 
 import io
@@ -44,21 +45,46 @@ if LOGO.exists():
     st.logo(str(LOGO), size="large")
 
 HINWEISE = f"""
-- Das System bereitet vor und prüft, es entscheidet nicht. Einstufung und Schlussfolgerung
-  jeder Feststellung verantwortet der Auditor.
+- Das System bereitet vor und prüft, es entscheidet nicht. Jede Feststellung und ihre
+  Einstufung verantwortet der Auditor.
 - Ihre Unterlagen werden zur Auswertung an den Dienst {PROVIDER or 'des eingestellten Anbieters'}
   übermittelt. Laden Sie keine vertraulichen Originalunterlagen und keine Personendaten hoch,
   solange das mit Ihrer IT und dem Datenschutz nicht geklärt ist.
-- Jedes Zitat wird gegen die Quelle geprüft und gekennzeichnet. Nicht bestätigte Zitate
-  sind ein Warnzeichen und dürfen nicht in einen Bericht übernommen werden.
+- Jedes Zitat wird gegen die Quelle geprüft. Ein nicht auffindbares Zitat ist ein Warnzeichen
+  und darf nicht in einen Bericht übernommen werden.
 - Der Arbeitsstand liegt nur in dieser Sitzung. Sichern Sie ihn links als Datei.
+"""
+
+LEGENDE = """
+**Wie Sie die Ampel lesen**
+
+🟢 **belegt** · Zu diesem Prüfpunkt gibt es einen Nachweis, dessen Zitat wörtlich in Ihren
+Unterlagen wiedergefunden wurde, und es steht kein schwerer Zweifel dagegen.
+
+🟡 **mit Zweifel** · Es gibt einen Nachweis, aber das Falsifikationsteam hat einen Einwand
+dagegen. Typisch ist, dass das Dokument zwar existiert, die Anforderung inhaltlich aber nicht
+abdeckt.
+
+🔴 **ohne Nachweis** · Es wurde kein belastbarer Nachweis gefunden, oder ein Nachweis spricht
+gegen die Erfüllung. Das sind die Stellen, an denen Abweichungen entstehen.
+
+**Was die Begriffe bedeuten**
+
+*Zitat belegt* heisst nur, dass der zitierte Satz wirklich so in Ihrem Dokument steht. Es heisst
+nicht, dass die Normanforderung erfüllt ist. Das entscheiden Sie.
+
+*Zitat nicht auffindbar* heisst, dass die KI einen Satz zitiert hat, den es in Ihren Unterlagen
+so nicht gibt. Solche Nachweise sind wertlos und dürfen nie in den Bericht.
+
+*Behauptung ohne Nachweis* heisst, dass das Konstruktionsteam etwas annehmen musste, weil in den
+Unterlagen nichts dazu steht. Genau das sind die Punkte, die Sie vor Ort nachfragen sollten.
 """
 
 # ---------------------------------------------------------------------------
 # Rollen der Agenten
 # ---------------------------------------------------------------------------
 SPRACHREGEL = ("\n\nSPRACHE: Schreibe alle Inhalte ausschliesslich auf Deutsch in Schweizer "
-               "Rechtschreibung (ss statt ß). Zitate aus Nachweisen übernimmst du wörtlich.")
+               "Rechtschreibung (ss statt ß). Zitate übernimmst du wörtlich.")
 NORMREGEL = ("\n\nNORMBEZUG: Beziehe dich nur auf die genannte Norm und Abschnittsnummer. "
              "Erfinde keine weiteren Normabschnitte und keine Normzitate.")
 JSONREGEL = "\n\nAUSGABE: Antworte ausschliesslich mit gültigem JSON, ohne Vor- und Nachtext."
@@ -70,18 +96,21 @@ Regeln
 1. Wähle nur Normabschnitte, zu denen die Nachweise tatsächlich etwas hergeben.
 2. Höchstens sechs Abschnitte, nach Bedeutung geordnet.
 3. Begründe jede Wahl in einem Satz mit Bezug auf die Nachweise.
+4. Nenne, welche Nachweise für ein belastbares Audit fehlen.
 Schema
 {"kriterien": ["7.2"], "begruendungen": {"7.2": "..."}, "ziel": "...", "umfang": "...",
  "fehlende_nachweise": ["..."]}"""
 
 PRO_SYSTEM = """Du bist das KONSTRUKTIONSTEAM eines internen Audits.
 Baue einen Konformitätsnachweis als Assurance Case (Aussage, Argument, Nachweis).
-Ordne jede Teilaussage einem Prüfpunkt des Auditkriteriums zu.
+Bilde für JEDEN Prüfpunkt des Auditkriteriums genau eine Teilaussage und übernimm den
+Wortlaut des Prüfpunkts unverändert in das Feld pruefpunkt.
 Regeln
 1. Nutze ausschliesslich die bereitgestellten Nachweise.
 2. Jeder Nachweis enthält den exakten Quellennamen und ein WÖRTLICHES Zitat (höchstens 40 Wörter).
-3. Prüfe nicht nur, OB etwas vorliegt, sondern ob der Inhalt die Aussage trägt.
+3. Prüfe nicht nur, OB etwas vorliegt, sondern ob der Inhalt die Anforderung inhaltlich abdeckt.
 4. Was nicht belegt ist, trägst du als Annahme ein. Verstecke keine Lücken.
+5. Schreibe die Aussage in einem kurzen, klaren Satz ohne Fachjargon.
 Schema
 {"hauptaussage": "...", "teilaussagen": [{"id": "T1", "pruefpunkt": "...", "aussage": "...",
  "argument": "...", "nachweise": [{"dokument": "...", "zitat": "..."}], "annahmen": ["..."]}]}"""
@@ -91,14 +120,15 @@ Du erhältst einen Assurance Case und die Nachweise. Dein Ziel ist, ihn zu wider
 Einwandtypen
 "widerlegend": Nachweise belegen das Gegenteil der Aussage.
 "untergrabend": Der Nachweis ist unzuverlässig, veraltet, nicht freigegeben oder unvollständig.
-"unterlaufend": Der Nachweis stimmt, stützt die Aussage aber inhaltlich nicht.
+"unterlaufend": Der Nachweis stimmt, deckt die Anforderung inhaltlich aber nicht ab.
 "ungestuetzte_annahme": Eine Annahme trägt die Aussage, ohne belegt zu sein.
 Achte besonders auf Widersprüche zwischen Vorgabe, Aufzeichnung, Aussagen aus Interviews,
 Beobachtungen und Leistungsdaten.
 Regeln
 1. Erfinde nichts. Zitate müssen wörtlich aus den Nachweisen stammen.
-2. Fehlt ein Nachweis ganz, lass die Liste "nachweise" leer und begründe das.
-3. Schlage für jeden Einwand eine konkrete Prüfung vor Ort vor.
+2. Fehlt ein Nachweis ganz, lass die Liste nachweise leer und begründe das.
+3. Schreibe die Begründung in höchstens drei klaren Sätzen.
+4. Schlage für jeden Einwand eine konkrete Prüfung vor Ort vor.
 Schema
 {"einwaende": [{"id": "E1", "ziel": "T1", "typ": "...", "begruendung": "...",
  "nachweise": [{"dokument": "...", "zitat": "..."}], "schwere": "hoch|mittel|gering",
@@ -114,8 +144,8 @@ BERICHT_SYSTEM = """Du formulierst Auditfeststellungen nach ISO 19011, also Anfo
 Normabschnitt, objektiver Nachweis und Feststellung. Die Einstufung hat der Auditor bereits
 getroffen, du darfst sie NICHT ändern. Formuliere sachlich, prüfbar, ohne Schuldzuweisung
 und ohne Namen einzelner Personen.
-Schreibe zusätzlich eine Zusammenfassung von höchstens acht Sätzen, die beschreibt, was
-geprüft wurde und wo die Schwerpunkte der Feststellungen liegen. Bewerte darin nicht.
+Schreibe zusätzlich eine Zusammenfassung von höchstens acht Sätzen, die beschreibt, was geprüft
+wurde und wo die Schwerpunkte liegen. Bewerte darin nicht.
 Schema
 {"zusammenfassung": "...", "feststellungen": [{"einwand": "E1", "einstufung": "...",
  "abschnitt": "...", "anforderung": "...", "objektiver_nachweis": "...", "feststellung": "..."}]}"""
@@ -132,13 +162,38 @@ Schema
  "korrekturmassnahme": "...", "verantwortlich_rolle": "...", "frist_tage": 30,
  "wirksamkeitsnachweis": "..."}]}"""
 
+AGENTEN = [
+    ("vorbereitung", "Vorbereitungsteam", "Plan",
+     "Liest die Nachweise, wählt die passenden Normabschnitte, schreibt Auditziel und Umfang "
+     "und nennt fehlende Nachweise.", SCOPING_SYSTEM, "Konstruktionsmodell"),
+    ("pro", "Konstruktionsteam", "Check",
+     "Baut je Normabschnitt den bestmöglichen Konformitätsnachweis und markiert unbelegte "
+     "Annahmen offen. Es ist bewusst der Anwalt der Organisation.", PRO_SYSTEM,
+     "Konstruktionsmodell"),
+    ("contra", "Falsifikationsteam", "Check",
+     "Greift diesen Nachweis an und sucht widerlegende, untergrabende und unterlaufende "
+     "Nachweise sowie ungestützte Annahmen. Es ist bewusst der Gegenspieler.", CONTRA_SYSTEM,
+     "Falsifikationsmodell"),
+    ("erwiderung", "Erwiderung des Konstruktionsteams", "Check",
+     "Antwortet auf jeden Einwand und gesteht zu, was die Nachweise stützen.",
+     ERWIDERUNG_SYSTEM, "Konstruktionsmodell"),
+    ("bericht", "Berichtsteam", "Check",
+     "Formuliert die Feststellungen aus den Entscheidungen des Auditors. Es darf die "
+     "Einstufung nicht ändern.", BERICHT_SYSTEM, "Konstruktionsmodell"),
+    ("massnahmen", "Massnahmenteam", "Act",
+     "Leitet je bestätigter Feststellung Ursachenhypothese, Sofort- und Korrekturmassnahme, "
+     "Verantwortung, Frist und Wirksamkeitsnachweis ab.", MASSNAHMEN_SYSTEM,
+     "Falsifikationsmodell")]
+
 URTEILE = ["Ausgeräumt", "Bestätigt: Abweichung", "Bestätigt: Verbesserungspotenzial",
            "Offen: vor Ort prüfen"]
-TYPEN = {"widerlegend": "widerlegend", "untergrabend": "untergrabend",
-         "unterlaufend": "unterlaufend", "ungestuetzte_annahme": "ungestützte Annahme"}
+TYPEN = {"widerlegend": "Nachweise sprechen dagegen",
+         "untergrabend": "Nachweis ist nicht belastbar",
+         "unterlaufend": "Nachweis deckt die Anforderung nicht ab",
+         "ungestuetzte_annahme": "Behauptung ohne Nachweis"}
 RISIKO = ["hoch", "mittel", "gering"]
-STATUS = ["geplant", "in Arbeit", "abgeschlossen"]
-MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt"]
+STATUS = ["geplant", "in Vorbereitung", "durchgeführt", "berichtet", "abgeschlossen"]
+MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt", "nicht wirksam"]
 
 
 # ---------------------------------------------------------------------------
@@ -220,14 +275,19 @@ def json_aus_text(text: str):
     return {"fehler": "Keine gültige JSON-Antwort", "rohtext": text[:2000]}
 
 
-def llm_json(modell: str, system: str, nutzer: str, audit: dict):
+def llm_json(modell: str, system: str, nutzer: str, audit: dict, rolle: str = ""):
     """Anfrage an die OpenAI-kompatible Schnittstelle, bei Bedarf als Datenstrom."""
+    zusatz = (audit.get("prompt_zusatz") or {}).get(rolle, "").strip()
+    if zusatz:
+        system += ("\n\nZUSÄTZLICHE ANWEISUNG DES AUDITORS. Sie ergänzt die Regeln oben und "
+                   "hebt sie nicht auf:\n" + zusatz)
     system = system + NORMREGEL + SPRACHREGEL + JSONREGEL
     basis = {"model": modell, "temperature": 0.2, "max_tokens": MAX_TOKENS, "stream": STREAM,
              "response_format": {"type": "json_object"},
              "messages": [{"role": "system", "content": system},
                           {"role": "user", "content": nutzer}]}
     kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    start = datetime.now()
 
     def senden(mit_format: bool):
         daten = dict(basis)
@@ -248,9 +308,8 @@ def llm_json(modell: str, system: str, nutzer: str, audit: dict):
 
     if r.status_code != 200:
         if r.status_code in (502, 503, 504):
-            raise ModellFehler(f"Der Dienst hat abgebrochen (HTTP {r.status_code}). "
-                               "Weniger Nachweise laden oder MAX_TOKENS und MAX_ZEICHEN "
-                               "in den Secrets verkleinern.")
+            raise ModellFehler(f"Der Dienst hat abgebrochen (HTTP {r.status_code}). Weniger "
+                               "Nachweise laden oder MAX_TOKENS und MAX_ZEICHEN verkleinern.")
         raise ModellFehler(f"HTTP {r.status_code}: {r.text[:400]}")
 
     if STREAM:
@@ -275,8 +334,10 @@ def llm_json(modell: str, system: str, nutzer: str, audit: dict):
         inhalt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
 
     audit.setdefault("protokoll", []).append(
-        {"zeit": datetime.now().isoformat(timespec="seconds"), "modell": modell,
-         "rolle": system[:60], "zeichen_eingabe": len(nutzer), "ausgabe": inhalt[:4000]})
+        {"zeit": start.isoformat(timespec="seconds"), "rolle": rolle, "modell": modell,
+         "dauer_sekunden": round((datetime.now() - start).total_seconds()),
+         "zeichen_eingabe": len(nutzer), "zeichen_ausgabe": len(inhalt),
+         "zusatzanweisung": zusatz, "ausgabe": inhalt[:6000]})
     if not inhalt:
         raise ModellFehler("Das Modell hat nichts zurückgegeben. Bitte erneut versuchen.")
     return json_aus_text(inhalt)
@@ -304,8 +365,7 @@ def quellen_sammeln(audit: dict) -> dict:
 
 
 def korpus(quellen: dict) -> str:
-    text = "".join(f"\n=== NACHWEIS: {n} ===\n{i}\n" for n, i in quellen.items())
-    return text[:MAX_ZEICHEN]
+    return "".join(f"\n=== NACHWEIS: {n} ===\n{i}\n" for n, i in quellen.items())[:MAX_ZEICHEN]
 
 
 def kriterium_text(katalog: dict, abschnitt: dict) -> str:
@@ -322,35 +382,45 @@ def plan_vorschlagen(audit: dict, katalog: dict):
     return llm_json(MODEL_PRO, SCOPING_SYSTEM,
                     f"Norm {katalog['norm']}\n\nNormabschnitte\n{liste}\n\n"
                     f"Auditierter Prozess: {audit.get('prozess', '')}\n\n"
-                    f"Vorhandene Nachweise\n{probe}", audit)
+                    f"Vorhandene Nachweise\n{probe}", audit, "vorbereitung")
 
 
-def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True):
+def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True, melden=None):
     quellen = quellen_sammeln(audit)
     kriterium = kriterium_text(katalog, abschnitt)
     material = korpus(quellen)
+    nr = abschnitt["nr"]
+    if melden:
+        melden(f"Konstruktionsteam prüft Abschnitt {nr}")
     fall = llm_json(MODEL_PRO, PRO_SYSTEM,
-                    f"Auditkriterium\n{kriterium}\n\nNachweise\n{material}", audit)
+                    f"Auditkriterium\n{kriterium}\n\nNachweise\n{material}", audit, "pro")
     for t in fall.get("teilaussagen", []):
         zitate_pruefen(t.get("nachweise"), quellen)
+    if melden:
+        melden(f"Falsifikationsteam greift Abschnitt {nr} an")
     einw = llm_json(MODEL_CONTRA, CONTRA_SYSTEM,
                     f"Auditkriterium\n{kriterium}\n\nAssurance Case\n"
-                    f"{json.dumps(fall, ensure_ascii=False)}\n\nNachweise\n{material}", audit)
-    praefix = abschnitt["nr"].replace(".", "_")
+                    f"{json.dumps(fall, ensure_ascii=False)}\n\nNachweise\n{material}",
+                    audit, "contra")
+    praefix = nr.replace(".", "_")
     for x in einw.get("einwaende", []):
         x["id"] = f"{praefix}-{x.get('id', 'E')}"
-        x["abschnitt"] = abschnitt["nr"]
+        x["abschnitt"] = nr
         zitate_pruefen(x.get("nachweise"), quellen)
     erw = {"erwiderungen": []}
     if mit_erwiderung and einw.get("einwaende"):
+        if melden:
+            melden(f"Konstruktionsteam erwidert zu Abschnitt {nr}")
         erw = llm_json(MODEL_PRO, ERWIDERUNG_SYSTEM,
                        f"Einwände\n{json.dumps(einw, ensure_ascii=False)}\n\n"
-                       f"Nachweise\n{material}", audit)
+                       f"Nachweise\n{material}", audit, "erwiderung")
         for x in erw.get("erwiderungen", []):
             zitate_pruefen(x.get("nachweise"), quellen)
-    audit.setdefault("analysen", {})[abschnitt["nr"]] = {
-        "titel": abschnitt["titel"], "kriterium": kriterium, "fall": fall, "einwaende": einw,
-        "erwiderungen": erw, "modelle": {"pro": MODEL_PRO, "contra": MODEL_CONTRA},
+    audit.setdefault("analysen", {})[nr] = {
+        "titel": abschnitt["titel"], "anforderung": abschnitt["anforderung"],
+        "pruefpunkte": abschnitt.get("pruefpunkte", []), "kriterium": kriterium,
+        "fall": fall, "einwaende": einw, "erwiderungen": erw,
+        "modelle": {"pro": MODEL_PRO, "contra": MODEL_CONTRA},
         "zeit": datetime.now().isoformat(timespec="seconds")}
 
 
@@ -359,26 +429,64 @@ def alle_einwaende(audit: dict) -> list:
             for e in erg.get("einwaende", {}).get("einwaende", [])]
 
 
+def ampel_teilaussage(t: dict, einwaende: list, urteile: dict):
+    """Gibt (Zeichen, Kurztext) fuer eine Teilaussage zurueck."""
+    belegt = any(n.get("verifiziert") for n in t.get("nachweise", []))
+    offen = [e for e in einwaende if e.get("ziel") == t.get("id")
+             and urteile.get(e.get("id"), {}).get("urteil") != "Ausgeräumt"]
+    schwer = [e for e in offen if e.get("typ") in ("widerlegend", "untergrabend")
+              or e.get("schwere") == "hoch"]
+    if not belegt or schwer:
+        return "🔴", "ohne belastbaren Nachweis"
+    if offen or t.get("annahmen"):
+        return "🟡", "Nachweis vorhanden, Zweifel offen"
+    return "🟢", "belegt"
+
+
+def ampel_abschnitt(erg: dict, urteile: dict):
+    einwaende = erg.get("einwaende", {}).get("einwaende", [])
+    zeichen = [ampel_teilaussage(t, einwaende, urteile)[0]
+               for t in erg.get("fall", {}).get("teilaussagen", [])]
+    if not zeichen:
+        return "🔴", "Kein Nachweis erarbeitet"
+    gruen, gelb, rot = zeichen.count("🟢"), zeichen.count("🟡"), zeichen.count("🔴")
+    if rot:
+        lage = "Mögliche Abweichung, mindestens ein Prüfpunkt ohne Nachweis"
+    elif gelb:
+        lage = "Nachweis unvollständig, offene Zweifel"
+    else:
+        lage = "Anforderung durchgängig belegt"
+    return ("🔴" if rot else "🟡" if gelb else "🟢"), f"{lage} ({gruen} belegt, {gelb} mit Zweifel, {rot} ohne Nachweis)"
+
+
 def kennzahlen(audit: dict) -> dict:
     nachweise = [n for erg in audit.get("analysen", {}).values()
                  for t in erg.get("fall", {}).get("teilaussagen", [])
                  for n in t.get("nachweise", [])]
     nachweise += [n for e in alle_einwaende(audit) for n in e.get("nachweise", [])]
     urteile = [u.get("urteil") for u in audit.get("urteile", {}).values()]
+    mass = audit.get("massnahmen", [])
     return {"abschnitte": len(audit.get("analysen", {})),
             "einwaende": len(alle_einwaende(audit)),
+            "beurteilt": sum(1 for u in urteile if u),
             "zitate": len(nachweise),
             "zitate_belegt": sum(1 for n in nachweise if n.get("verifiziert")),
             "abweichungen": sum(1 for u in urteile if u == "Bestätigt: Abweichung"),
             "potenziale": sum(1 for u in urteile if u == "Bestätigt: Verbesserungspotenzial"),
             "offen": sum(1 for u in urteile if u == "Offen: vor Ort prüfen"),
-            "ausgeraeumt": sum(1 for u in urteile if u == "Ausgeräumt")}
+            "ausgeraeumt": sum(1 for u in urteile if u == "Ausgeräumt"),
+            "massnahmen": len(mass),
+            "massnahmen_offen": sum(1 for m in mass
+                                    if m.get("status") in ("offen", "in Umsetzung"))}
 
 
-def nachweise_anzeigen(nachweise):
+def nachweise_anzeigen(nachweise, leer_hinweis="Kein Nachweis angegeben."):
+    if not nachweise:
+        st.caption(leer_hinweis)
     for n in nachweise or []:
-        marke = "Zitat belegt" if n.get("verifiziert") else "Zitat NICHT in der Quelle gefunden"
-        st.markdown(f"> {n.get('zitat', '')}  \n*{n.get('dokument', '')}* · {marke}")
+        marke = ("🟢 Zitat im Dokument gefunden" if n.get("verifiziert")
+                 else "🔴 Zitat NICHT im Dokument gefunden, nicht verwendbar")
+        st.markdown(f"> {n.get('zitat', '')}  \n*Quelle · {n.get('dokument', '')}* · {marke}")
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +494,6 @@ def nachweise_anzeigen(nachweise):
 # ---------------------------------------------------------------------------
 def bericht_bloecke(audit: dict) -> dict:
     k = kennzahlen(audit)
-    fs = audit.get("feststellungen", {}).get("feststellungen", [])
     kopf = [("Organisation", ORGANISATION or "nicht angegeben"),
             ("Auditierter Bereich oder Prozess", audit.get("prozess", "")),
             ("Auditziel", audit.get("ziel", "")),
@@ -394,13 +501,15 @@ def bericht_bloecke(audit: dict) -> dict:
             ("Auditkriterien", f"{audit.get('norm', '')}, Abschnitte "
                                + ", ".join(audit.get("kriterien", []))),
             ("Auditor", audit.get("auditor", "")),
+            ("Unparteilichkeit bestätigt", "ja" if audit.get("unparteilich") else "nicht bestätigt"),
             ("Auditierte", audit.get("auditierte", "")),
             ("Audittermin", audit.get("termin", "")),
             ("Berichtsdatum", f"{date.today():%d.%m.%Y}")]
     quellen = ([f"Dokument · {n}" for n in audit.get("dokumente", {})]
                + [f"{n['typ']} · {n.get('quelle', '')} · {n.get('datum', '')}"
                   for n in audit.get("notizen", [])])
-    return {"kennzahlen": k, "kopf": kopf, "quellen": quellen, "feststellungen": fs,
+    return {"kennzahlen": k, "kopf": kopf, "quellen": quellen,
+            "feststellungen": audit.get("feststellungen", {}).get("feststellungen", []),
             "zusammenfassung": audit.get("feststellungen", {}).get("zusammenfassung", ""),
             "fazit": audit.get("fazit", ""),
             "ausgeraeumt": [(i, u["begruendung"]) for i, u in audit.get("urteile", {}).items()
@@ -416,15 +525,18 @@ def bericht_markdown(audit: dict) -> str:
     z += ["", "## Zusammenfassung", b["zusammenfassung"] or "nicht erstellt", ""]
     if b["fazit"]:
         z += ["### Fazit des Auditors", b["fazit"], ""]
-    z += ["## Kennzahlen der Prüfung", "",
-          "| Grösse | Wert |", "| --- | --- |",
+    z += ["## Ergebnis je Normabschnitt", "", "| Abschnitt | Ergebnis |", "| --- | --- |"]
+    for nr, erg in audit.get("analysen", {}).items():
+        zeichen, text = ampel_abschnitt(erg, audit.get("urteile", {}))
+        z.append(f"| {nr} {erg.get('titel', '')} | {zeichen} {text} |")
+    z += ["", "## Kennzahlen der Prüfung", "", "| Grösse | Wert |", "| --- | --- |",
           f"| Geprüfte Normabschnitte | {k['abschnitte']} |",
           f"| Geprüfte Zweifel insgesamt | {k['einwaende']} |",
           f"| Davon ausgeräumt | {k['ausgeraeumt']} |",
           f"| Abweichungen | {k['abweichungen']} |",
           f"| Verbesserungspotenziale | {k['potenziale']} |",
           f"| Vor Ort nachzuprüfen | {k['offen']} |",
-          f"| Zitate gegen die Quelle bestätigt | {k['zitate_belegt']} von {k['zitate']} |", ""]
+          f"| Zitate in der Quelle gefunden | {k['zitate_belegt']} von {k['zitate']} |", ""]
     z += ["## Geprüfte Nachweise"] + [f"- {q}" for q in b["quellen"]] + [""]
     z += ["## Feststellungen"]
     if not b["feststellungen"]:
@@ -439,7 +551,7 @@ def bericht_markdown(audit: dict) -> str:
     if not b["massnahmen"]:
         z.append("Keine Massnahmen erfasst.")
     else:
-        z += ["", "| Feststellung | Massnahme | Verantwortlich | Termin | Status |",
+        z += ["", "| Feststellung | Korrekturmassnahme | Verantwortlich | Termin | Status |",
               "| --- | --- | --- | --- | --- |"]
         for m in b["massnahmen"]:
             z.append(f"| {m.get('feststellung', '')} | {m.get('beschreibung', '')} | "
@@ -455,9 +567,9 @@ def bericht_markdown(audit: dict) -> str:
     z += ["## Ausgeräumte Zweifel (Nachweis der Prüftiefe)"]
     z += [f"- {i}: {g}" for i, g in b["ausgeraeumt"]] or ["Keine."]
     z += ["", "---", "", "Erstellt mit einem dialektischen Prüfverfahren. Zwei getrennte "
-          "Agententeams haben den Konformitätsnachweis konstruiert und angegriffen. "
-          "Über jeden verbliebenen Zweifel hat der Auditor entschieden und dies begründet. "
-          "Einstufung und Schlussfolgerung verantwortet der Auditor."]
+          "Agententeams haben den Konformitätsnachweis konstruiert und angegriffen. Über jeden "
+          "verbliebenen Zweifel hat der Auditor entschieden und dies begründet. Einstufung und "
+          "Schlussfolgerung verantwortet der Auditor."]
     return "\n".join(z)
 
 
@@ -466,7 +578,7 @@ def bericht_html(audit: dict) -> str:
     k = b["kennzahlen"]
 
     def schutz(t):
-        return (str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+        return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     kopf = "".join(f"<tr><th>{schutz(n)}</th><td>{schutz(w)}</td></tr>" for n, w in b["kopf"])
     kacheln = "".join(
@@ -475,6 +587,12 @@ def bericht_html(audit: dict) -> str:
                      ("Abweichungen", k["abweichungen"]), ("Potenziale", k["potenziale"]),
                      ("Vor Ort offen", k["offen"]),
                      ("Zitate belegt", f"{k['zitate_belegt']}/{k['zitate']}")])
+    klasse = {"🟢": "gruen", "🟡": "gelb", "🔴": "rot"}
+    uebersicht = "".join(
+        f'<tr><td>{schutz(nr)} {schutz(erg.get("titel", ""))}</td>'
+        f'<td class="{klasse[ampel_abschnitt(erg, audit.get("urteile", {}))[0]]}">'
+        f'{schutz(ampel_abschnitt(erg, audit.get("urteile", {}))[1])}</td></tr>'
+        for nr, erg in audit.get("analysen", {}).items())
     farbe = {"Bestätigt: Abweichung": "abw", "Bestätigt: Verbesserungspotenzial": "pot",
              "Offen: vor Ort prüfen": "off"}
     fest = "".join(
@@ -493,7 +611,7 @@ def bericht_html(audit: dict) -> str:
         f"<td>{schutz(m.get('status', ''))}</td></tr>" for m in b["massnahmen"])
     quellen = "".join(f"<li>{schutz(q)}</li>" for q in b["quellen"])
     ausger = "".join(f"<li><b>{schutz(i)}</b> {schutz(g)}</li>" for i, g in b["ausgeraeumt"])
-    fazit = (f"<h2>Fazit des Auditors</h2><p>{schutz(b['fazit'])}</p>") if b["fazit"] else ""
+    fazit = f"<h2>Fazit des Auditors</h2><p>{schutz(b['fazit'])}</p>" if b["fazit"] else ""
     return f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <title>Auditbericht {schutz(audit.get('titel', ''))}</title><style>
 body{{font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;margin:2rem auto;
@@ -504,6 +622,7 @@ table{{border-collapse:collapse;width:100%;margin:.6rem 0}}
 th,td{{border:1px solid #d5dde5;padding:.45rem .6rem;text-align:left;vertical-align:top;
 font-size:.92rem}}
 th{{background:#f0f4f8;width:16rem}}
+td.gruen{{background:#e8f5e9}} td.gelb{{background:#fff8e1}} td.rot{{background:#fdecea}}
 .kacheln{{display:flex;flex-wrap:wrap;gap:.6rem;margin:1rem 0}}
 .kachel{{flex:1 1 8rem;background:#f0f4f8;border-radius:8px;padding:.7rem;text-align:center}}
 .zahl{{font-size:1.6rem;font-weight:700;color:#1f4e79}}
@@ -520,6 +639,8 @@ border-top:1px solid #d5dde5;padding-top:.8rem}}
 <table>{kopf}</table>
 <h2>Zusammenfassung</h2><p>{schutz(b['zusammenfassung']) or 'nicht erstellt'}</p>
 {fazit}
+<h2>Ergebnis je Normabschnitt</h2>
+<table><tr><th>Abschnitt</th><th>Ergebnis der Nachweisprüfung</th></tr>{uebersicht}</table>
 <h2>Kennzahlen der Prüfung</h2><div class="kacheln">{kacheln}</div>
 <h2>Feststellungen</h2>{fest}
 <h2>Massnahmenplan</h2>
@@ -541,11 +662,11 @@ audits = st.session_state.audits
 
 st.title(APP_NAME)
 st.caption((ORGANISATION + " · " if ORGANISATION else "")
-           + "Internes Audit vorbereiten, prüfen, beurteilen und verbessern")
+           + "Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
 
 with st.sidebar:
-    bereich = st.radio("Bereich", ["1 · Auditprogramm", "2 · Einzelaudit", "3 · Massnahmen"],
-                       label_visibility="collapsed")
+    bereich = st.radio("Bereich", ["Plan · Auditprogramm", "Do und Check · Einzelaudit",
+                                   "Act · Nachverfolgung"], label_visibility="collapsed")
     st.divider()
     st.subheader("Arbeitsstand")
     st.caption("Nichts wird dauerhaft gespeichert. Stand als Datei sichern und später laden.")
@@ -562,16 +683,17 @@ with st.sidebar:
     with st.expander("Hinweise zur Nutzung"):
         st.markdown(HINWEISE)
     with st.expander("Technik"):
-        st.caption(f"Konstruktionsteam {MODEL_PRO}\n\nFalsifikationsteam {MODEL_CONTRA}")
+        st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
         schnell = st.checkbox("Schnellmodus ohne Erwiderungsrunde", value=False)
         if not API_KEY:
             st.error("Kein API-Schlüssel in den Secrets hinterlegt.")
 
-# ---------------------------------------------------------------- 1 Programm
-if bereich.startswith("1"):
-    st.subheader("Auditprogramm")
-    st.caption("ISO 9001 Abschnitt 9.2 verlangt ein geplantes Programm nach Bedeutung und "
-               "Risiko der Prozesse. Legen Sie hier die Audits des Jahres an.")
+# ================================================================ Plan
+if bereich.startswith("Plan"):
+    st.subheader("Auditprogramm des Jahres")
+    st.caption("ISO 9001 Abschnitt 9.2 verlangt ein Auditprogramm, das Häufigkeit, Methoden "
+               "und Verantwortlichkeiten festlegt und sich nach Bedeutung und Risiko der "
+               "Prozesse sowie nach den Ergebnissen früherer Audits richtet.")
     if not kataloge:
         st.error("Kein Normkatalog gefunden. Legen Sie eine JSON-Datei im Ordner normen ab.")
         st.stop()
@@ -579,34 +701,43 @@ if bereich.startswith("1"):
         s1, s2, s3 = st.columns(3)
         titel = s1.text_input("Bezeichnung", "Prozessaudit Einkauf")
         prozess = s2.text_input("Prozess oder Bereich", "Einkauf")
-        risiko = s3.selectbox("Risiko", RISIKO)
+        risiko = s3.selectbox("Bedeutung und Risiko", RISIKO)
         auditor = s1.text_input("Auditor")
         auditierte = s2.text_input("Auditierte Funktion")
-        termin = s3.date_input("Termin", date.today())
+        termin = s3.date_input("Geplanter Termin", date.today())
         norm = st.selectbox("Norm", list(kataloge))
-        st.caption("Die zu prüfenden Normabschnitte schlägt das System später anhand Ihrer "
-                   "Nachweise vor. Sie können sie jederzeit ändern.")
-        if st.form_submit_button("Audit anlegen", type="primary"):
-            audits.append({"id": date.today().strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:4],
-                           "titel": titel, "prozess": prozess, "risiko": risiko,
-                           "termin": str(termin), "auditor": auditor, "auditierte": auditierte,
-                           "norm": norm, "kriterien": [], "ziel": "", "umfang": "",
-                           "status": "geplant", "dokumente": {}, "notizen": [],
-                           "analysen": {}, "urteile": {}, "feststellungen": {},
-                           "massnahmen": [], "protokoll": [], "fazit": ""})
-            st.success("Audit angelegt. Weiter im Bereich Einzelaudit.")
-            st.rerun()
+        liste = {f"{a['nr']} {a['titel']}": a["nr"] for a in kataloge[norm]["abschnitte"]}
+        wahl = st.multiselect("Zu prüfende Normabschnitte (leer lassen, wenn das System "
+                              "sie anhand der Nachweise vorschlagen soll)", list(liste))
+        unparteilich = st.checkbox("Der Auditor prüft nicht die eigene Arbeit "
+                                   "(Unparteilichkeit nach ISO 9001 Abschnitt 9.2)")
+        if st.form_submit_button("Audit ins Programm aufnehmen", type="primary"):
+            if not unparteilich:
+                st.error("Ohne bestätigte Unparteilichkeit darf das Audit nicht geplant werden.")
+            else:
+                audits.append({"id": date.today().strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:4],
+                               "titel": titel, "prozess": prozess, "risiko": risiko,
+                               "termin": str(termin), "auditor": auditor,
+                               "auditierte": auditierte, "norm": norm,
+                               "kriterien": [liste[w] for w in wahl], "ziel": "", "umfang": "",
+                               "unparteilich": True, "status": "geplant", "dokumente": {},
+                               "notizen": [], "analysen": {}, "urteile": {},
+                               "feststellungen": {}, "massnahmen": [], "protokoll": [],
+                               "prompt_zusatz": {}, "fazit": ""})
+                st.success("Audit angelegt. Weiter im Bereich Einzelaudit.")
+                st.rerun()
 
     if audits:
         st.markdown("**Jahresübersicht**")
-        st.dataframe([{"ID": a["id"], "Bezeichnung": a["titel"], "Prozess": a.get("prozess", ""),
+        st.dataframe([{"Bezeichnung": a["titel"], "Prozess": a.get("prozess", ""),
                        "Risiko": a.get("risiko", ""), "Termin": a.get("termin", ""),
                        "Auditor": a.get("auditor", ""),
                        "Abschnitte": ", ".join(a.get("kriterien", [])) or "noch offen",
                        "Abweichungen": kennzahlen(a)["abweichungen"],
+                       "Offene Massnahmen": kennzahlen(a)["massnahmen_offen"],
                        "Status": a.get("status", "")} for a in audits],
                      use_container_width=True)
-        st.markdown("**Abdeckung der Normabschnitte**")
+        st.markdown("**Abdeckung der Normabschnitte über das Programm**")
         norm_wahl = st.selectbox("Norm", list(kataloge), key="abd")
         alle = [a["nr"] for a in kataloge[norm_wahl]["abschnitte"]]
         geplant = {nr for a in audits if a.get("norm") == norm_wahl
@@ -622,8 +753,8 @@ if bereich.startswith("1"):
     else:
         st.info("Noch keine Audits im Programm.")
 
-# ---------------------------------------------------------------- 2 Einzelaudit
-elif bereich.startswith("2"):
+# ================================================================ Do und Check
+elif bereich.startswith("Do"):
     if not audits:
         st.warning("Legen Sie zuerst im Auditprogramm ein Audit an.")
         st.stop()
@@ -637,26 +768,100 @@ elif bereich.startswith("2"):
         st.stop()
     abschnitte = {a["nr"]: a for a in katalog["abschnitte"]}
     k = kennzahlen(audit)
+    audit.setdefault("prompt_zusatz", {})
 
     with st.sidebar:
         st.divider()
         st.subheader("Fortschritt")
-        for name, fertig in [("Nachweise vorhanden", bool(quellen_sammeln(audit))),
-                             ("Auditplan steht", bool(audit.get("kriterien"))),
-                             ("Prüfung gelaufen", bool(audit.get("analysen"))),
-                             ("Urteile vollständig", k["einwaende"] > 0 and
-                              k["einwaende"] == sum(1 for u in audit.get("urteile", {}).values()
-                                                    if u.get("urteil"))),
-                             ("Bericht erstellt", bool(audit.get("feststellungen")))]:
+        schritte = [("Vorbereitung", bool(audit.get("kriterien"))),
+                    ("Nachweise gesammelt", bool(quellen_sammeln(audit))),
+                    ("Prüfung gelaufen", bool(audit.get("analysen"))),
+                    ("Urteile vollständig", k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"]),
+                    ("Bericht erstellt", bool(audit.get("feststellungen"))),
+                    ("Massnahmen festgelegt", bool(audit.get("massnahmen")))]
+        st.progress(sum(1 for _, f in schritte if f) / len(schritte))
+        for name, fertig in schritte:
             st.markdown(f"{name} · {'erledigt' if fertig else 'offen'}")
 
-    t1, t2, t3, t4 = st.tabs(["1 Nachweise", "2 Prüfung", "3 Urteil des Auditors",
-                              "4 Bericht und Massnahmen"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(
+        ["1 Vorbereitung", "2 Durchführung", "3 Dialektische Prüfung", "4 Urteil",
+         "5 Bericht", "6 Massnahmen"])
 
-    # ---------------- 1 Nachweise
+    # ---------------- 1 Vorbereitung (Plan)
     with t1:
-        st.caption("Alles, worauf sich das Audit stützt. Dokumente sind der Anfang, "
-                   "erst Interviews, Beobachtungen und Leistungsdaten zeigen die gelebte Praxis.")
+        st.caption("Plan. Auditplan festlegen und die Prüfpunkte kennen, bevor es losgeht.")
+        with st.form("plan"):
+            s1, s2 = st.columns(2)
+            audit["titel"] = s1.text_input("Bezeichnung", audit.get("titel", ""))
+            audit["prozess"] = s2.text_input("Prozess oder Bereich", audit.get("prozess", ""))
+            audit["auditor"] = s1.text_input("Auditor", audit.get("auditor", ""))
+            audit["auditierte"] = s2.text_input("Auditierte", audit.get("auditierte", ""))
+            audit["termin"] = str(s1.date_input(
+                "Termin", date.fromisoformat(audit.get("termin", str(date.today())))))
+            audit["status"] = s2.selectbox("Status", STATUS,
+                                           index=STATUS.index(audit.get("status", "geplant"))
+                                           if audit.get("status") in STATUS else 0)
+            audit["ziel"] = st.text_area("Auditziel", audit.get("ziel", ""),
+                                         placeholder="Feststellung der Konformität und "
+                                                     "Wirksamkeit des Prozesses")
+            audit["umfang"] = st.text_area("Umfang und Grenzen", audit.get("umfang", ""),
+                                           placeholder="Standort, Zeitraum, betrachtete "
+                                                       "Tätigkeiten, Stichprobenumfang")
+            liste = {f"{a['nr']} {a['titel']}": a["nr"] for a in katalog["abschnitte"]}
+            vorauswahl = [t for t, v in liste.items() if v in audit.get("kriterien", [])]
+            neu = st.multiselect("Zu prüfende Normabschnitte", list(liste), default=vorauswahl)
+            audit["unparteilich"] = st.checkbox(
+                "Unparteilichkeit bestätigt, der Auditor prüft nicht die eigene Arbeit",
+                value=bool(audit.get("unparteilich")))
+            if st.form_submit_button("Auditplan speichern", type="primary"):
+                audit["kriterien"] = [liste[n] for n in neu]
+                st.success("Gespeichert.")
+        if not audit.get("unparteilich"):
+            st.warning("Die Unparteilichkeit ist nicht bestätigt. ISO 9001 Abschnitt 9.2 "
+                       "verlangt, dass Auditoren ihre eigene Arbeit nicht auditieren.")
+
+        st.divider()
+        st.markdown("**Was in den gewählten Abschnitten geprüft wird**")
+        st.caption("Diese Übersicht ist zugleich Ihre Auditcheckliste und die Liste der "
+                   "Unterlagen, die Sie beim Fachbereich anfordern sollten.")
+        if not audit.get("kriterien"):
+            st.info("Noch keine Normabschnitte gewählt. Entweder oben auswählen oder im Reiter "
+                    "Prüfung vom System vorschlagen lassen.")
+        for nr in audit.get("kriterien", []):
+            a = abschnitte.get(nr)
+            if not a:
+                continue
+            with st.expander(f"{nr} {a['titel']}", expanded=False):
+                st.markdown(f"**Was die Norm verlangt**  \n{a['anforderung']}")
+                st.markdown("**Worauf der Auditor achtet**")
+                for p in a.get("pruefpunkte", []):
+                    st.markdown(f"- {p}")
+                if a.get("typische_nachweise"):
+                    st.markdown("**Diese Unterlagen sollten Sie bereitstellen**")
+                    for n in a["typische_nachweise"]:
+                        st.markdown(f"- {n}")
+        if audit.get("kriterien"):
+            zeilen = [f"# Auditplan {audit['titel']}", "",
+                      f"Termin {audit['termin']}", f"Prozess {audit['prozess']}",
+                      f"Auditor {audit['auditor']}", f"Auditierte {audit['auditierte']}",
+                      "", f"## Auditziel\n{audit.get('ziel', '')}",
+                      f"## Umfang\n{audit.get('umfang', '')}",
+                      f"## Auditkriterien\n{audit['norm']}, Abschnitte "
+                      + ", ".join(audit["kriterien"]), "", "## Checkliste"]
+            for nr in audit["kriterien"]:
+                a = abschnitte.get(nr, {})
+                zeilen += [f"### {nr} {a.get('titel', '')}", a.get("anforderung", ""), "",
+                           "Prüfpunkte"]
+                zeilen += [f"- {p}" for p in a.get("pruefpunkte", [])]
+                zeilen += ["", "Bereitzustellende Unterlagen"]
+                zeilen += [f"- {n}" for n in a.get("typische_nachweise", [])] + [""]
+            st.download_button("Auditplan mit Checkliste herunterladen", "\n".join(zeilen),
+                               file_name=f"auditplan_{audit['id']}.md")
+
+    # ---------------- 2 Durchfuehrung (Do)
+    with t2:
+        st.caption("Do. Objektive Nachweise sammeln. Dokumente sind der Anfang, erst "
+                   "Interviews, Beobachtungen und Leistungsdaten zeigen die gelebte Praxis.")
         neue = st.file_uploader("Dokumente hinzufügen (PDF, Word, Text)",
                                 type=["pdf", "docx", "txt", "md"], accept_multiple_files=True,
                                 key=f"up_{audit['id']}")
@@ -672,12 +877,16 @@ elif bereich.startswith("2"):
                 st.rerun()
         st.divider()
         st.markdown("**Interviews, Beobachtungen und Leistungsdaten**")
+        st.caption("Halten Sie Aussagen möglichst wörtlich fest. Das Falsifikationsteam "
+                   "vergleicht sie mit den Vorgabedokumenten und findet so Widersprüche "
+                   "zwischen Vorschrift und gelebter Praxis.")
         with st.form("notiz", clear_on_submit=True):
             s1, s2, s3 = st.columns(3)
-            typ = s1.selectbox("Art", ["Interviewnotiz", "Beobachtung", "Leistungsdaten"])
+            typ = s1.selectbox("Art", ["Interviewnotiz", "Beobachtung", "Leistungsdaten",
+                                       "Eröffnungsgespräch", "Abschlussgespräch"])
             quelle = s2.text_input("Quelle (Rolle, Arbeitsplatz, Kennzahl)")
             datum = s3.date_input("Datum", date.today())
-            text = st.text_area("Notiz, möglichst wörtlich festhalten", height=120)
+            text = st.text_area("Notiz", height=120)
             if st.form_submit_button("Notiz speichern") and text.strip():
                 audit.setdefault("notizen", []).append(
                     {"typ": typ, "quelle": quelle, "datum": str(datum), "text": text})
@@ -690,77 +899,147 @@ elif bereich.startswith("2"):
                     audit["notizen"].pop(i)
                     st.rerun()
 
-    # ---------------- 2 Pruefung
-    with t2:
+    # ---------------- 3 Dialektische Pruefung (Check)
+    with t3:
+        st.caption("Check. Ein Team baut den Konformitätsnachweis, ein zweites greift ihn an. "
+                   "Das Ergebnis ist eine Liste begründeter Zweifel, über die Sie im nächsten "
+                   "Reiter entscheiden.")
+
+        with st.expander("Die Agententeams ansehen und Anweisungen ergänzen"):
+            st.caption("Hier sehen Sie, welche Rolle jedes Team hat und mit welcher Anweisung "
+                       "es arbeitet. Ihre Ergänzung wird an die Anweisung angehängt und gilt "
+                       "für dieses Audit. Sie kann die Grundregeln nicht aufheben.")
+            for schluessel, name, phase, zweck, prompt, modell in AGENTEN:
+                with st.container(border=True):
+                    st.markdown(f"**{name}** · Phase {phase} · {modell}")
+                    st.write(zweck)
+                    audit["prompt_zusatz"][schluessel] = st.text_area(
+                        "Eigene Ergänzung für dieses Team", key=f"pz_{audit['id']}_{schluessel}",
+                        value=audit["prompt_zusatz"].get(schluessel, ""), height=70,
+                        placeholder="Beispiel: Achte besonders auf Fristen und auf "
+                                    "Dokumente ohne Freigabevermerk.")
+                    with st.expander("Grundanweisung dieses Teams anzeigen"):
+                        st.code(prompt, language="text")
+
         if not quellen_sammeln(audit):
-            st.warning("Bitte zuerst Nachweise erfassen.")
+            st.warning("Bitte zuerst im Reiter Durchführung Nachweise erfassen.")
         else:
-            st.markdown("**Automatischer Durchlauf**")
-            st.caption("Das System schlägt die passenden Normabschnitte vor, baut je Abschnitt "
-                       "den Konformitätsnachweis, greift ihn an und legt Ihnen die verbliebenen "
-                       "Zweifel zur Entscheidung vor.")
-            if st.button("Audit vorbereiten und prüfen", type="primary",
-                         use_container_width=True):
+            start = st.button("Prüfung starten", type="primary", use_container_width=True)
+            if start:
+                balken = st.progress(0.0, text="Vorbereitung")
+                protokoll = st.empty()
                 try:
-                    with st.status("Die Agententeams arbeiten", expanded=True) as stt:
-                        if not audit.get("kriterien"):
-                            st.write("Vorbereitungsteam wählt die Normabschnitte")
-                            vor = plan_vorschlagen(audit, katalog)
-                            gueltig = [n for n in vor.get("kriterien", []) if n in abschnitte]
-                            audit["kriterien"] = gueltig or list(abschnitte)[:3]
-                            audit["ziel"] = vor.get("ziel", audit.get("ziel", ""))
-                            audit["umfang"] = vor.get("umfang", audit.get("umfang", ""))
-                            audit["planbegruendung"] = vor.get("begruendungen", {})
-                            audit["fehlende_nachweise"] = vor.get("fehlende_nachweise", [])
-                            st.write("Gewählt: " + ", ".join(audit["kriterien"]))
-                        for nr in audit["kriterien"]:
-                            if nr in audit.get("analysen", {}):
-                                continue
-                            st.write(f"Abschnitt {nr} {abschnitte[nr]['titel']}")
-                            analyse_durchfuehren(audit, katalog, abschnitte[nr], not schnell)
-                        audit["status"] = "in Arbeit"
-                        stt.update(label="Prüfung abgeschlossen", state="complete")
+                    schritte_gesamt = max(1, len(audit.get("kriterien") or [1]) * 3 + 1)
+                    zaehler = {"n": 0}
+
+                    def melden(text):
+                        zaehler["n"] += 1
+                        balken.progress(min(1.0, zaehler["n"] / schritte_gesamt), text=text)
+                        protokoll.caption(text)
+
+                    if not audit.get("kriterien"):
+                        melden("Vorbereitungsteam wählt die Normabschnitte")
+                        vor = plan_vorschlagen(audit, katalog)
+                        gueltig = [n for n in vor.get("kriterien", []) if n in abschnitte]
+                        audit["kriterien"] = gueltig or list(abschnitte)[:3]
+                        audit["ziel"] = vor.get("ziel", audit.get("ziel", ""))
+                        audit["umfang"] = vor.get("umfang", audit.get("umfang", ""))
+                        audit["planbegruendung"] = vor.get("begruendungen", {})
+                        audit["fehlende_nachweise"] = vor.get("fehlende_nachweise", [])
+                        schritte_gesamt = len(audit["kriterien"]) * 3 + 1
+                    for nr in audit["kriterien"]:
+                        if nr in audit.get("analysen", {}):
+                            continue
+                        analyse_durchfuehren(audit, katalog, abschnitte[nr], not schnell, melden)
+                    audit["status"] = "durchgeführt"
+                    balken.progress(1.0, text="Prüfung abgeschlossen")
                     st.rerun()
                 except ModellFehler as f:
                     st.error(str(f))
 
             if audit.get("analysen"):
-                s1, s2, s3 = st.columns(3)
+                s1, s2, s3, s4 = st.columns(4)
                 s1.metric("Geprüfte Abschnitte", k["abschnitte"])
                 s2.metric("Gefundene Zweifel", k["einwaende"])
                 s3.metric("Zitate belegt", f"{k['zitate_belegt']} / {k['zitate']}")
+                s4.metric("Noch zu beurteilen", k["einwaende"] - k["beurteilt"])
+                if k["zitate"] and k["zitate_belegt"] < k["zitate"]:
+                    st.warning(f"{k['zitate'] - k['zitate_belegt']} Zitate wurden in Ihren "
+                               "Unterlagen nicht wiedergefunden. Diese Nachweise sind nicht "
+                               "verwendbar, sie sind rot markiert.")
             if audit.get("fehlende_nachweise"):
-                st.info("Das Vorbereitungsteam vermisst: "
-                        + "; ".join(audit["fehlende_nachweise"]))
+                st.info("Das Vorbereitungsteam vermisst: " + "; ".join(audit["fehlende_nachweise"]))
 
-            with st.expander("Auditplan ansehen und ändern"):
-                liste = {f"{a['nr']} {a['titel']}": a["nr"] for a in katalog["abschnitte"]}
-                vorauswahl = [t for t, v in liste.items() if v in audit.get("kriterien", [])]
-                neu = st.multiselect("Normabschnitte", list(liste), default=vorauswahl)
-                audit["ziel"] = st.text_area("Auditziel", audit.get("ziel", ""))
-                audit["umfang"] = st.text_area("Umfang und Grenzen", audit.get("umfang", ""))
-                if st.button("Auditplan übernehmen"):
-                    audit["kriterien"] = [liste[n] for n in neu]
-                    st.rerun()
-                for nr, grund in (audit.get("planbegruendung") or {}).items():
-                    st.caption(f"{nr} · {grund}")
+            with st.expander("Wie Sie die Ergebnisse lesen"):
+                st.markdown(LEGENDE)
 
+            urteile = audit.get("urteile", {})
             for nr, erg in audit.get("analysen", {}).items():
-                with st.expander(f"Konformitätsnachweis Abschnitt {nr} {erg.get('titel', '')}"):
-                    fall = erg.get("fall", {})
-                    st.markdown(f"**Hauptaussage** {fall.get('hauptaussage', '')}")
-                    for t in fall.get("teilaussagen", []):
-                        st.markdown(f"**{t.get('id')}** {t.get('aussage')}")
-                        st.caption(f"Prüfpunkt · {t.get('pruefpunkt', '')}")
-                        nachweise_anzeigen(t.get("nachweise"))
-                        for a in t.get("annahmen", []):
-                            st.markdown(f"Annahme ohne Beleg · {a}")
+                einwaende_abschnitt = erg.get("einwaende", {}).get("einwaende", [])
+                erwid = {x.get("einwand"): x
+                         for x in erg.get("erwiderungen", {}).get("erwiderungen", [])}
+                zeichen, lage = ampel_abschnitt(erg, urteile)
+                with st.container(border=True):
+                    st.markdown(f"### {zeichen} Abschnitt {nr} {erg.get('titel', '')}")
+                    st.markdown(f"**Ergebnis der Nachweisprüfung** · {lage}")
+                    st.caption("Das ist der Befund des Systems auf Basis der Unterlagen. "
+                               "Die Feststellung treffen Sie im Reiter Urteil.")
+                    with st.expander("Was die Norm hier verlangt"):
+                        st.write(erg.get("anforderung", ""))
+                    for t in erg.get("fall", {}).get("teilaussagen", []):
+                        z, kurz = ampel_teilaussage(t, einwaende_abschnitt, urteile)
+                        zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
+                        st.markdown(f"**{z} {t.get('pruefpunkt') or t.get('aussage')}**  \n"
+                                    f"{kurz} · {len(t.get('nachweise', []))} Nachweise · "
+                                    f"{len(zweifel)} Zweifel")
+                        with st.expander("Nachvollziehen"):
+                            st.markdown(f"**Befund des Konstruktionsteams**  \n{t.get('aussage')}")
+                            st.caption(t.get("argument", ""))
+                            st.markdown("**Nachweise aus Ihren Unterlagen**")
+                            nachweise_anzeigen(t.get("nachweise"),
+                                               "Keine Nachweise gefunden. Das ist der Grund "
+                                               "für die rote Ampel.")
+                            if t.get("annahmen"):
+                                st.markdown("**Behauptungen ohne Nachweis**")
+                                for a in t["annahmen"]:
+                                    st.markdown(f"- {a}")
+                                st.caption("Solche Punkte können Sie im Gespräch vor Ort klären.")
+                            if zweifel:
+                                st.markdown("**Zweifel des Falsifikationsteams**")
+                            for e in zweifel:
+                                st.markdown(f"**{e['id']}** · {TYPEN.get(e.get('typ'), e.get('typ'))} "
+                                            f"· Schwere {e.get('schwere')}")
+                                st.write(e.get("begruendung"))
+                                nachweise_anzeigen(e.get("nachweise"),
+                                                   "Kein Gegenbeleg, der Einwand stützt sich "
+                                                   "auf das Fehlen eines Nachweises.")
+                                kurz_e = erwid.get(e["id"].split("-", 1)[-1]) or erwid.get(e["id"])
+                                if kurz_e:
+                                    st.markdown("Erwiderung des Konstruktionsteams · "
+                                                + ("zugestanden · " if kurz_e.get("zugestanden")
+                                                   else "")
+                                                + str(kurz_e.get("erwiderung")))
+                                st.caption(f"Vorschlag Prüfung vor Ort · {e.get('pruefung_vor_ort')}")
+                                u = urteile.get(e["id"], {}).get("urteil")
+                                st.caption(f"Ihr Urteil · {u or 'noch offen'}")
                     if st.button(f"Abschnitt {nr} erneut prüfen", key=f"rm_{nr}"):
                         del audit["analysen"][nr]
                         st.rerun()
 
-    # ---------------- 3 Urteil
-    with t3:
+            with st.expander("Agentenprotokoll, wer wann was geliefert hat"):
+                if not audit.get("protokoll"):
+                    st.caption("Noch kein Lauf.")
+                for p in audit.get("protokoll", []):
+                    st.markdown(f"**{p.get('rolle')}** · {p.get('modell')} · {p.get('zeit')} · "
+                                f"{p.get('dauer_sekunden')} Sekunden · "
+                                f"{p.get('zeichen_eingabe')} Zeichen Eingabe")
+                    if p.get("zusatzanweisung"):
+                        st.caption("Ergänzung des Auditors · " + p["zusatzanweisung"])
+                    with st.expander("Rohausgabe"):
+                        st.code(p.get("ausgabe", ""), language="json")
+
+    # ---------------- 4 Urteil (Check)
+    with t4:
         einwaende = alle_einwaende(audit)
         if not einwaende:
             st.info("Noch keine Zweifel. Führen Sie zuerst die Prüfung durch.")
@@ -768,7 +1047,10 @@ elif bereich.startswith("2"):
             erw = {x.get("einwand"): x for erg in audit.get("analysen", {}).values()
                    for x in erg.get("erwiderungen", {}).get("erwiderungen", [])}
             st.caption("Hier endet die Automatik. Sie entscheiden über jeden Zweifel und "
-                       "begründen das. Diese Begründung ist Teil des Auditnachweises.")
+                       "begründen das. Diese Begründung ist Teil des Auditnachweises und zeigt "
+                       "im Bericht, wie tief geprüft wurde.")
+            st.progress(k["beurteilt"] / max(1, k["einwaende"]),
+                        text=f"{k['beurteilt']} von {k['einwaende']} Zweifeln beurteilt")
             nur_offen = st.checkbox("Nur noch unbeurteilte anzeigen", value=False)
             for e in einwaende:
                 eid = e["id"]
@@ -779,19 +1061,21 @@ elif bereich.startswith("2"):
                     st.markdown(f"#### {eid} · {TYPEN.get(e.get('typ'), e.get('typ'))} "
                                 f"· Schwere {e.get('schwere')}")
                     st.caption(f"Normabschnitt {e.get('abschnitt')} · "
-                               f"richtet sich gegen {e.get('ziel')}")
+                               f"betrifft Prüfpunkt {e.get('ziel')}")
                     links, rechts = st.columns(2)
                     with links:
                         st.markdown("**Zweifel des Falsifikationsteams**")
                         st.write(e.get("begruendung"))
-                        nachweise_anzeigen(e.get("nachweise"))
+                        nachweise_anzeigen(e.get("nachweise"),
+                                           "Kein Gegenbeleg, der Einwand stützt sich auf das "
+                                           "Fehlen eines Nachweises.")
                     with rechts:
                         st.markdown("**Erwiderung des Konstruktionsteams**")
                         kurz = erw.get(eid.split("-", 1)[-1]) or erw.get(eid)
                         if kurz:
                             st.write(("zugestanden · " if kurz.get("zugestanden") else "")
                                      + str(kurz.get("erwiderung")))
-                            nachweise_anzeigen(kurz.get("nachweise"))
+                            nachweise_anzeigen(kurz.get("nachweise"), "Kein weiterer Nachweis.")
                         else:
                             st.write("keine Erwiderung")
                     st.caption(f"Vorschlag Prüfung vor Ort · {e.get('pruefung_vor_ort')}")
@@ -809,89 +1093,69 @@ elif bereich.startswith("2"):
             if st.button("Urteile festschreiben, Bericht und Massnahmen erzeugen",
                          type="primary", disabled=bool(fehlend), use_container_width=True):
                 relevant = [u for u in audit["urteile"].values() if u["urteil"] != "Ausgeräumt"]
+                balken = st.progress(0.0, text="Feststellungen werden formuliert")
                 try:
-                    with st.status("Bericht und Massnahmen werden erstellt", expanded=True) as stt:
-                        st.write("Feststellungen werden formuliert")
-                        audit["feststellungen"] = llm_json(
-                            MODEL_PRO, BERICHT_SYSTEM,
-                            f"Auditkriterien {audit['norm']}, Abschnitte "
-                            f"{', '.join(audit['kriterien'])}\n\nEntscheidungen des Auditors\n"
-                            f"{json.dumps(relevant, ensure_ascii=False)}", audit)
-                        fs = audit["feststellungen"].get("feststellungen", [])
-                        if fs:
-                            st.write("Massnahmenteam leitet Verbesserungen ab")
-                            vor = llm_json(MODEL_CONTRA, MASSNAHMEN_SYSTEM,
-                                           "Bestätigte Feststellungen\n"
-                                           f"{json.dumps(fs, ensure_ascii=False)}", audit)
-                            vorhanden = {m.get("feststellung") for m in audit.get("massnahmen", [])}
-                            for m in vor.get("massnahmen", []):
-                                if m.get("feststellung") in vorhanden:
-                                    continue
-                                try:
-                                    tage = int(m.get("frist_tage", 30))
-                                except (TypeError, ValueError):
-                                    tage = 30
-                                audit.setdefault("massnahmen", []).append({
-                                    "id": uuid.uuid4().hex[:6],
-                                    "feststellung": m.get("feststellung", ""),
-                                    "beschreibung": m.get("korrekturmassnahme", ""),
-                                    "sofortmassnahme": m.get("sofortmassnahme", ""),
-                                    "ursache_hypothese": m.get("ursache_hypothese", ""),
-                                    "wirksamkeitsnachweis": m.get("wirksamkeitsnachweis", ""),
-                                    "verantwortlich": m.get("verantwortlich_rolle", ""),
-                                    "termin": str(date.today() + timedelta(days=tage)),
-                                    "status": "offen", "audit": audit["id"]})
-                        stt.update(label="Fertig, weiter im Reiter Bericht", state="complete")
+                    audit["feststellungen"] = llm_json(
+                        MODEL_PRO, BERICHT_SYSTEM,
+                        f"Auditkriterien {audit['norm']}, Abschnitte "
+                        f"{', '.join(audit['kriterien'])}\n\nEntscheidungen des Auditors\n"
+                        f"{json.dumps(relevant, ensure_ascii=False)}", audit, "bericht")
+                    fs = audit["feststellungen"].get("feststellungen", [])
+                    balken.progress(0.5, text="Massnahmenteam leitet Verbesserungen ab")
+                    if fs:
+                        vor = llm_json(MODEL_CONTRA, MASSNAHMEN_SYSTEM,
+                                       "Bestätigte Feststellungen\n"
+                                       f"{json.dumps(fs, ensure_ascii=False)}", audit,
+                                       "massnahmen")
+                        vorhanden = {m.get("feststellung") for m in audit.get("massnahmen", [])}
+                        for m in vor.get("massnahmen", []):
+                            if m.get("feststellung") in vorhanden:
+                                continue
+                            try:
+                                tage = int(m.get("frist_tage", 30))
+                            except (TypeError, ValueError):
+                                tage = 30
+                            audit.setdefault("massnahmen", []).append({
+                                "id": uuid.uuid4().hex[:6],
+                                "feststellung": m.get("feststellung", ""),
+                                "beschreibung": m.get("korrekturmassnahme", ""),
+                                "sofortmassnahme": m.get("sofortmassnahme", ""),
+                                "ursache_hypothese": m.get("ursache_hypothese", ""),
+                                "wirksamkeitsnachweis": m.get("wirksamkeitsnachweis", ""),
+                                "verantwortlich": m.get("verantwortlich_rolle", ""),
+                                "termin": str(date.today() + timedelta(days=tage)),
+                                "status": "offen", "wirksam_geprueft": "", "audit": audit["id"],
+                                "audit_titel": audit.get("titel", "")})
+                    audit["status"] = "berichtet"
+                    balken.progress(1.0, text="Fertig")
                     st.rerun()
                 except ModellFehler as f:
                     st.error(str(f))
 
-    # ---------------- 4 Bericht und Massnahmen
-    with t4:
+    # ---------------- 5 Bericht (Check)
+    with t5:
         if not audit.get("feststellungen"):
             st.info("Der Bericht entsteht, sobald Sie alle Zweifel beurteilt haben.")
         else:
+            st.caption("Check. Der Bericht geht an die zuständige Leitung und wird als "
+                       "dokumentierte Information aufbewahrt.")
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Abweichungen", k["abweichungen"])
             s2.metric("Potenziale", k["potenziale"])
             s3.metric("Vor Ort offen", k["offen"])
             s4.metric("Ausgeräumt", k["ausgeraeumt"])
+            st.markdown("**Ergebnis je Normabschnitt**")
+            st.dataframe([{"Abschnitt": f"{nr} {erg.get('titel', '')}",
+                           "Ergebnis": " ".join(ampel_abschnitt(erg, audit.get("urteile", {})))}
+                          for nr, erg in audit.get("analysen", {}).items()],
+                         use_container_width=True, hide_index=True)
             audit["fazit"] = st.text_area(
                 "Fazit des Auditors (erscheint im Bericht)", value=audit.get("fazit", ""),
                 height=110, help="Ihre Gesamteinschätzung. Die Maschine schreibt sie nicht.")
-            st.divider()
-            st.markdown("**Massnahmenplan, vom System vorgeschlagen und von Ihnen zu bestätigen**")
-            st.caption("Die Ursachen sind Hypothesen. Prüfen Sie sie, bevor Sie die Massnahme "
-                       "freigeben, und tragen Sie die verantwortliche Stelle ein.")
-            if audit.get("massnahmen"):
-                tabelle = st.data_editor(
-                    audit["massnahmen"], num_rows="dynamic", use_container_width=True,
-                    key=f"me_{audit['id']}",
-                    column_config={
-                        "id": None, "audit": None,
-                        "feststellung": st.column_config.TextColumn("Feststellung", width="small"),
-                        "beschreibung": st.column_config.TextColumn("Korrekturmassnahme",
-                                                                    width="large"),
-                        "sofortmassnahme": st.column_config.TextColumn("Sofortmassnahme"),
-                        "ursache_hypothese": st.column_config.TextColumn("Ursachenhypothese"),
-                        "wirksamkeitsnachweis": st.column_config.TextColumn("Wirksamkeitsnachweis"),
-                        "verantwortlich": st.column_config.TextColumn("Verantwortlich"),
-                        "termin": st.column_config.TextColumn("Termin", width="small"),
-                        "status": st.column_config.SelectboxColumn("Status", options=MSTATUS)})
-                if st.button("Massnahmen übernehmen"):
-                    for zeile in tabelle:
-                        zeile.setdefault("id", uuid.uuid4().hex[:6])
-                        zeile.setdefault("audit", audit["id"])
-                        zeile.setdefault("status", "offen")
-                    audit["massnahmen"] = list(tabelle)
-                    st.success("Gespeichert.")
-            else:
-                st.caption("Keine Massnahmen, weil keine Feststellung bestätigt wurde.")
-            st.divider()
             s1, s2, s3 = st.columns(3)
             s1.download_button("Bericht als Webseite (HTML)", bericht_html(audit),
-                               file_name=f"auditbericht_{audit['id']}.html",
-                               mime="text/html", use_container_width=True)
+                               file_name=f"auditbericht_{audit['id']}.html", mime="text/html",
+                               use_container_width=True)
             s2.download_button("Bericht als Text (Markdown)", bericht_markdown(audit),
                                file_name=f"auditbericht_{audit['id']}.md",
                                use_container_width=True)
@@ -905,22 +1169,85 @@ elif bereich.startswith("2"):
             with st.expander("Bericht ansehen"):
                 st.markdown(bericht_markdown(audit))
 
-# ---------------------------------------------------------------- 3 Massnahmen
+    # ---------------- 6 Massnahmen (Act)
+    with t6:
+        st.caption("Act. Zu jeder bestätigten Feststellung müssen Korrekturen und "
+                   "Korrekturmassnahmen festgelegt werden. Die Vorschläge stammen vom "
+                   "Massnahmenteam, bestätigen muss sie der Fachbereich.")
+        if not audit.get("massnahmen"):
+            st.info("Noch keine Massnahmen. Sie entstehen nach dem Festschreiben der Urteile.")
+        else:
+            st.warning("Die Ursachen sind Hypothesen der KI. Prüfen Sie sie mit den "
+                       "Prozessverantwortlichen, bevor Sie eine Massnahme freigeben.")
+            tabelle = st.data_editor(
+                audit["massnahmen"], num_rows="dynamic", use_container_width=True,
+                key=f"me_{audit['id']}",
+                column_config={
+                    "id": None, "audit": None, "audit_titel": None,
+                    "feststellung": st.column_config.TextColumn("Feststellung", width="small"),
+                    "beschreibung": st.column_config.TextColumn("Korrekturmassnahme",
+                                                                width="large"),
+                    "sofortmassnahme": st.column_config.TextColumn("Sofortmassnahme"),
+                    "ursache_hypothese": st.column_config.TextColumn("Ursachenhypothese"),
+                    "wirksamkeitsnachweis": st.column_config.TextColumn("Wirksamkeitsnachweis"),
+                    "verantwortlich": st.column_config.TextColumn("Verantwortlich"),
+                    "termin": st.column_config.TextColumn("Termin", width="small"),
+                    "status": st.column_config.SelectboxColumn("Status", options=MSTATUS),
+                    "wirksam_geprueft": st.column_config.TextColumn("Wirksamkeit geprüft am")})
+            if st.button("Massnahmen übernehmen", type="primary"):
+                for zeile in tabelle:
+                    zeile.setdefault("id", uuid.uuid4().hex[:6])
+                    zeile.setdefault("audit", audit["id"])
+                    zeile.setdefault("audit_titel", audit.get("titel", ""))
+                    zeile.setdefault("status", "offen")
+                    zeile.setdefault("wirksam_geprueft", "")
+                audit["massnahmen"] = list(tabelle)
+                st.success("Gespeichert. Die Nachverfolgung finden Sie links im Bereich Act.")
+
+# ================================================================ Act
 else:
-    st.subheader("Massnahmen über alle Audits")
-    zeilen = [{"Audit": a["titel"], "Feststellung": m.get("feststellung", ""),
-               "Massnahme": m.get("beschreibung", ""),
-               "Verantwortlich": m.get("verantwortlich", ""), "Termin": m.get("termin", ""),
-               "Status": m.get("status", ""),
-               "überfällig": "ja" if (m.get("status") in ("offen", "in Umsetzung")
-                                      and str(m.get("termin", "")) < str(date.today())) else ""}
+    st.subheader("Nachverfolgung der Wirksamkeit")
+    st.caption("Act. ISO 9001 verlangt, die Wirksamkeit der ergriffenen Massnahmen zu prüfen "
+               "und zu dokumentieren. Die Ergebnisse fliessen in die Managementbewertung ein.")
+    zeilen = [dict(m, Audit=a.get("titel", ""),
+                   ueberfaellig="ja" if (m.get("status") in ("offen", "in Umsetzung")
+                                         and str(m.get("termin", "")) < str(date.today())) else "")
               for a in audits for m in a.get("massnahmen", [])]
     if not zeilen:
         st.info("Noch keine Massnahmen. Sie entstehen im Einzelaudit nach Ihrem Urteil.")
     else:
-        s1, s2, s3 = st.columns(3)
+        s1, s2, s3, s4 = st.columns(4)
         s1.metric("Massnahmen gesamt", len(zeilen))
-        s2.metric("Offen", sum(1 for z in zeilen if z["Status"] in ("offen", "in Umsetzung")))
-        s3.metric("Überfällig", sum(1 for z in zeilen if z["überfällig"]))
-        st.dataframe(zeilen, use_container_width=True)
-        st.caption("Status ändern Sie im jeweiligen Audit im Reiter Bericht und Massnahmen.")
+        s2.metric("Offen", sum(1 for z in zeilen if z.get("status") in ("offen", "in Umsetzung")))
+        s3.metric("Überfällig", sum(1 for z in zeilen if z["ueberfaellig"]))
+        s4.metric("Wirksam bestätigt",
+                  sum(1 for z in zeilen if z.get("status") == "wirksam bestätigt"))
+        st.dataframe([{"Audit": z["Audit"], "Feststellung": z.get("feststellung", ""),
+                       "Massnahme": z.get("beschreibung", ""),
+                       "Verantwortlich": z.get("verantwortlich", ""),
+                       "Termin": z.get("termin", ""), "Status": z.get("status", ""),
+                       "Wirksamkeit geprüft": z.get("wirksam_geprueft", ""),
+                       "überfällig": z["ueberfaellig"]} for z in zeilen],
+                     use_container_width=True, hide_index=True)
+        st.divider()
+        st.markdown("**Wirksamkeit einer Massnahme prüfen**")
+        auswahl = {f"{z['Audit']} · {z.get('feststellung', '')} · {z.get('beschreibung', '')[:50]}":
+                   (z.get("audit"), z.get("id")) for z in zeilen}
+        gewaehlt = st.selectbox("Massnahme", list(auswahl))
+        aid, mid = auswahl[gewaehlt]
+        ziel = next((m for a in audits if a["id"] == aid
+                     for m in a.get("massnahmen", []) if m.get("id") == mid), None)
+        if ziel:
+            st.caption(f"Vereinbarter Wirksamkeitsnachweis · {ziel.get('wirksamkeitsnachweis', '')}")
+            s1, s2 = st.columns(2)
+            ergebnis = s1.selectbox("Ergebnis der Prüfung",
+                                    ["wirksam bestätigt", "nicht wirksam", "umgesetzt"])
+            pruefdatum = s2.date_input("Geprüft am", date.today())
+            nachweis = st.text_area("Was wurde geprüft und mit welchem Ergebnis",
+                                    value=ziel.get("wirksamkeit_notiz", ""), height=90)
+            if st.button("Wirksamkeitsprüfung festhalten", type="primary"):
+                ziel["status"] = ergebnis
+                ziel["wirksam_geprueft"] = str(pruefdatum)
+                ziel["wirksamkeit_notiz"] = nachweis
+                st.success("Dokumentiert.")
+                st.rerun()
