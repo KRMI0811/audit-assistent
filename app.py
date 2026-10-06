@@ -30,9 +30,11 @@ API_KEY = str(st.secrets.get("API_KEY", "")).strip()
 PROVIDER = st.secrets.get("PROVIDER_NAME", "xAI (Grok)")
 MODEL_PRO = st.secrets.get("MODEL_PRO", "grok-4.3")
 MODEL_CONTRA = st.secrets.get("MODEL_CONTRA", "grok-4.20")
-TIMEOUT = float(st.secrets.get("TIMEOUT", 300))
+TIMEOUT = float(st.secrets.get("TIMEOUT", 600))
+MAX_TOKENS = int(st.secrets.get("MAX_TOKENS", 3000))
+STREAM = bool(st.secrets.get("STREAM", True))
 
-MAX_ZEICHEN = 40000
+MAX_ZEICHEN = int(st.secrets.get("MAX_ZEICHEN", 20000))
 NORMEN_ORDNER = Path(__file__).parent / "normen"
 LOGO = Path(__file__).parent / "logo.png"
 
@@ -196,27 +198,72 @@ def json_aus_text(text: str):
 
 
 def llm_json(modell: str, system: str, nutzer: str, audit: dict):
+    """Anfrage an die OpenAI-kompatible Schnittstelle, bei Bedarf als Datenstrom.
+
+    Streaming hält die Verbindung offen. Ohne das brechen langsame Gateways
+    die Anfrage mit einem Fehler 504 ab, bevor das Modell fertig ist.
+    """
     system = system + NORMREGEL + SPRACHREGEL + JSONREGEL
-    nutzlast = {"model": modell, "temperature": 0.2, "max_tokens": 6000, "stream": False,
-                "response_format": {"type": "json_object"},
+    nutzlast = {"model": modell, "temperature": 0.2, "max_tokens": MAX_TOKENS,
+                "stream": STREAM, "response_format": {"type": "json_object"},
                 "messages": [{"role": "system", "content": system},
                              {"role": "user", "content": nutzer}]}
+    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+
+    def senden(mit_format: bool):
+        daten = dict(nutzlast)
+        if not mit_format:
+            daten.pop("response_format", None)
+        return requests.post(f"{API_BASE}/chat/completions", headers=kopf, json=daten,
+                             timeout=(15, TIMEOUT), stream=STREAM)
+
     try:
-        r = requests.post(f"{API_BASE}/chat/completions",
-                          headers={"Authorization": f"Bearer {API_KEY}",
-                                   "Content-Type": "application/json"},
-                          json=nutzlast, timeout=(15, TIMEOUT))
+        r = senden(True)
+        if r.status_code == 400:
+            r.close()
+            r = senden(False)   # Modell kennt das erzwungene JSON-Format nicht
     except requests.exceptions.Timeout:
-        raise ModellFehler("Zeitüberschreitung. Weniger Nachweise je Lauf wählen.")
+        raise ModellFehler("Zeitüberschreitung. Weniger Nachweise je Lauf wählen oder "
+                           "MAX_ZEICHEN in den Secrets verkleinern.")
     except requests.RequestException as f:
         raise ModellFehler(f"Verbindung fehlgeschlagen: {f}")
+
     if r.status_code != 200:
-        raise ModellFehler(f"HTTP {r.status_code}: {r.text[:600]}")
-    nachricht = r.json().get("choices", [{}])[0].get("message", {})
-    inhalt = (nachricht.get("content") or "").strip()
+        text = r.text[:400]
+        if r.status_code in (502, 503, 504):
+            raise ModellFehler(
+                f"Der Dienst hat die Anfrage abgebrochen (HTTP {r.status_code}). "
+                "Das passiert bei zu langen Anfragen. Laden Sie weniger Nachweise, "
+                "oder verkleinern Sie MAX_TOKENS und MAX_ZEICHEN in den Secrets.")
+        raise ModellFehler(f"HTTP {r.status_code}: {text}")
+
+    if STREAM:
+        teile = []
+        try:
+            for zeile in r.iter_lines(decode_unicode=True):
+                if not zeile or not zeile.startswith("data:"):
+                    continue
+                nutzdaten = zeile[5:].strip()
+                if nutzdaten == "[DONE]":
+                    break
+                try:
+                    stueck = json.loads(nutzdaten)
+                except json.JSONDecodeError:
+                    continue
+                delta = (stueck.get("choices") or [{}])[0].get("delta", {})
+                teile.append(delta.get("content") or "")
+        except requests.RequestException as f:
+            raise ModellFehler(f"Die Antwort wurde unterbrochen: {f}")
+        inhalt = "".join(teile).strip()
+    else:
+        nachricht = r.json().get("choices", [{}])[0].get("message", {})
+        inhalt = (nachricht.get("content") or "").strip()
+
     audit.setdefault("protokoll", []).append(
         {"zeit": datetime.now().isoformat(timespec="seconds"), "modell": modell,
          "system": system[:200], "zeichen_eingabe": len(nutzer), "ausgabe": inhalt[:4000]})
+    if not inhalt:
+        raise ModellFehler("Das Modell hat nichts zurückgegeben. Bitte erneut versuchen.")
     return json_aus_text(inhalt)
 
 
