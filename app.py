@@ -680,6 +680,563 @@ Auditor.</footer></body></html>"""
 
 
 # ---------------------------------------------------------------------------
+# Berichtsformular nach dem Muster eines Auditkurzberichts, auf ISO 9001 bezogen
+# Aufbau (schluessel, Beschriftung, Hilfetext, Zeilen im Eingabefeld)
+# ---------------------------------------------------------------------------
+BERICHT_FELDER = [
+    ("ziel_audit", "1.1 Zielsetzung des Audits",
+     "Wozu wird auditiert. Wird aus dem Auditplan vorbelegt.", 100),
+    ("dienstleistung", "1.2 Auditierter Prozess oder Bereich",
+     "Welcher Prozess, welche Tätigkeiten und welche Schnittstellen.", 80),
+    ("institution", "1.3 Organisation und Ansprechpartner",
+     "Organisationseinheit, Anzahl Mitarbeitende, Prozessverantwortliche.", 80),
+    ("zeitplan", "1.4 Auditzeitplan",
+     "Datum, Uhrzeit, Ablauf, vor Ort oder remote.", 70),
+    ("standort", "1.5 Geprüfter Standort",
+     "Nur bei mehreren Standorten oder virtuellen Standorten ausfüllen.", 60),
+    ("unterlagen", "1.6 Eingereichte Unterlagen",
+     "Wird aus den erfassten Nachweisen vorbelegt.", 120),
+    ("haftung", "1.7 Haftungsausschluss",
+     "Standardtext. Die Prüfung beruht auf einer Stichprobe.", 90),
+    ("verteiler", "1.8 Verteiler",
+     "Wer den Bericht erhält. ISO 9001 verlangt Bericht an die zuständige Leitung.", 80),
+    ("geltungsbereich", "2 Geltungsbereich",
+     "Welcher Teil des QM-Systems geprüft wurde.", 80),
+    ("begriffe", "3 Begriffe",
+     "Definition von Abweichung, Hinweis und Empfehlung.", 110),
+    ("veraenderungen_org", "4.1 Wichtige Veränderungen in der Organisation",
+     "Organisatorische und personelle Änderungen seit dem letzten Audit.", 80),
+    ("veraenderungen_prozess", "4.2 Veränderungen am Prozess oder Angebot",
+     "Neue oder geänderte Prozesse, Produkte oder Dienstleistungen.", 80),
+    ("kennzahlen_entwicklung", "4.3 Entwicklung der relevanten Kennzahlen",
+     "Mengen, Reklamationen, Termintreue, Ausschuss und ähnliche Daten.", 80),
+    ("erledigung_vorjahr", "4.4 Erledigungsnachweise früherer Korrekturmassnahmen",
+     "Stand der Massnahmen aus früheren Audits und Bewertung ihrer Wirksamkeit.", 90),
+    ("umgang_hinweise", "4.5 Umgang mit Hinweisen aus früheren Berichten",
+     "Welche Hinweise wurden aufgegriffen, welche bleiben offen.", 80),
+    ("qualitaetsinitiativen", "4.6 Eigene Qualitätsinitiativen",
+     "Projekte, Evaluationen und Verbesserungen aus eigener Initiative.", 80),
+    ("selbstbewertung", "4.7 Selbstbewertung der Organisation",
+     "Wie die Organisation ihren eigenen Erfüllungsgrad einschätzt.", 80),
+    ("regelkreis_fuehrung", "5.1.1 Regelkreis Führung und Qualitätsmanagement",
+     "Normabschnitte 4, 5, 6, 9.3 und 10. Wird aus den Befunden vorbelegt.", 110),
+    ("regelkreis_leistung", "5.1.2 Regelkreis Leistungserbringung und Unterstützung",
+     "Normabschnitte 7 und 8. Wird aus den Befunden vorbelegt.", 110),
+    ("gespraeche", "5.2 Eröffnungs- und Abschlussgespräch",
+     "Wird aus den erfassten Gesprächsnotizen vorbelegt.", 100),
+    ("erfuellung", "6.1 Erfüllung der geprüften Normabschnitte",
+     "Wird aus der Ampelübersicht vorbelegt.", 120),
+    ("begruendung", "6.2 Begründung des Auditergebnisses",
+     "Warum das Ergebnis so ausfällt. Das ist Ihre Kernaussage als Auditor.", 120),
+    ("hinweise_text", "6.3.3 Hinweise",
+     "Entwicklungspotenziale und Risiken ohne Abweichungscharakter. "
+     "Wird aus den Verbesserungspotenzialen vorbelegt.", 110),
+    ("empfehlungen_text", "6.3.4 Empfehlungen",
+     "Freiwillige Anregungen mit Nutzen für die Organisation.", 100),
+    ("schlusswort", "6.4 Schlusswort",
+     "Abschliessende Würdigung und Hinweis auf die Grundlagen der Bewertung.", 120),
+    ("naechste_pruefung", "7 Planung der nächsten Überprüfung",
+     "Termin, Schwerpunkte und Standorte des nächsten Audits.", 80),
+    ("antrag", "8 Antrag an die Leitung",
+     "Was der Auditor der Leitung empfiehlt, etwa Freigabe mit oder ohne Auflagen.", 100),
+]
+
+
+def feld_vorbelegung(audit: dict, schluessel: str) -> str:
+    """Erzeugt den Vorschlagstext eines Berichtsfeldes aus den vorhandenen Daten."""
+    k = kennzahlen(audit)
+    urteile = audit.get("urteile", {})
+    analysen = audit.get("analysen", {})
+
+    if schluessel == "ziel_audit":
+        basis = audit.get("ziel", "").strip()
+        return (basis + "\n" if basis else "") + (
+            "Das Audit verfolgt folgende Ziele:\n"
+            f"- Prüfung der Konformität mit {audit.get('norm', 'der Norm')}, Abschnitte "
+            + ", ".join(audit.get("kriterien", [])) + "\n"
+            "- Beurteilung der Wirksamkeit des Prozesses und des Qualitätsmanagementsystems\n"
+            "- Bewertung der Massnahmen aus früheren Audits\n"
+            "- Ermittlung von Verbesserungspotenzialen\n"
+            "- Berichterstattung an die zuständige Leitung")
+    if schluessel == "dienstleistung":
+        return audit.get("prozess", "")
+    if schluessel == "institution":
+        return (f"{ORGANISATION}\nAuditierte Funktion: {audit.get('auditierte', '')}\n"
+                "Anzahl Mitarbeitende im geprüften Bereich: ")
+    if schluessel == "zeitplan":
+        return f"Audittermin: {audit.get('termin', '')}\nDurchführung: vor Ort"
+    if schluessel == "standort":
+        return "Nicht zutreffend, Einzelstandort."
+    if schluessel == "unterlagen":
+        zeilen = ["Folgende Nachweise wurden ausgewertet:"]
+        zeilen += [f"- Dokument: {n}" for n in audit.get("dokumente", {})]
+        zeilen += [f"- {n['typ']}: {n.get('quelle', '')} vom {n.get('datum', '')}"
+                   for n in audit.get("notizen", [])]
+        return "\n".join(zeilen)
+    if schluessel == "haftung":
+        return ("Das Audit beruht auf einem Stichprobenverfahren der verfügbaren Informationen. "
+                "Die Dokumentenanalyse wurde durch ein KI-gestütztes Prüfverfahren mit zwei "
+                "getrennt arbeitenden Agententeams unterstützt. Jedes von der KI angeführte "
+                "Zitat wurde maschinell gegen die Quelle geprüft. Die Bewertung der Nachweise "
+                "und alle Schlussfolgerungen verantwortet der Auditor.")
+    if schluessel == "verteiler":
+        return ("Diesen Bericht erhalten:\n- die oberste Leitung\n"
+                f"- die Leitung des auditierten Bereichs ({audit.get('auditierte', '')})\n"
+                "- die Qualitätsmanagementbeauftragte Person\n"
+                f"- der Auditor ({audit.get('auditor', '')})")
+    if schluessel == "geltungsbereich":
+        return (f"Geprüft wurde der Prozess {audit.get('prozess', '')} gegen "
+                f"{audit.get('norm', '')}, Abschnitte "
+                + ", ".join(audit.get("kriterien", [])) + ". "
+                + (audit.get("umfang", "") or ""))
+    if schluessel == "begriffe":
+        return ("Die verwendeten Begriffe orientieren sich an ISO 9000 und ISO 19011.\n"
+                "Abweichung (Nichtkonformität): Nichterfüllung einer Anforderung. "
+                "Eine wesentliche Abweichung liegt vor, wenn eine Anforderung systematisch oder "
+                "vollständig nicht erfüllt ist. Eine geringfügige Abweichung ist ein Einzelfall "
+                "oder eine formale Lücke ohne Systemversagen.\n"
+                "Hinweis: Entwicklungspotenzial oder Risiko ohne Abweichungscharakter.\n"
+                "Empfehlung: freiwillige Anregung ohne Verpflichtung zur Umsetzung.")
+    if schluessel in ("regelkreis_fuehrung", "regelkreis_leistung"):
+        fuehrung = ("4", "5", "6", "9", "10")
+        zeilen = []
+        for nr, erg in analysen.items():
+            ist_fuehrung = nr.split(".")[0] in fuehrung
+            if (schluessel == "regelkreis_fuehrung") != ist_fuehrung:
+                continue
+            zeichen, lage = ampel_abschnitt(erg, urteile)
+            zeilen.append(f"- {nr} {erg.get('titel', '')}: {lage}")
+        return "\n".join(zeilen) or "In diesem Regelkreis wurde kein Abschnitt geprüft."
+    if schluessel == "gespraeche":
+        zeilen = [f"{n['typ']} am {n.get('datum', '')} mit {n.get('quelle', '')}\n{n.get('text', '')}"
+                  for n in audit.get("notizen", [])
+                  if n.get("typ") in ("Eröffnungsgespräch", "Abschlussgespräch")]
+        return "\n\n".join(zeilen) or ("Eröffnungs- und Abschlussgespräch wurden durchgeführt. "
+                                       "Inhalte bitte ergänzen.")
+    if schluessel == "erfuellung":
+        zeilen = []
+        for nr, erg in analysen.items():
+            zeichen, lage = ampel_abschnitt(erg, urteile)
+            wort = {"🟢": "erfüllt", "🟡": "mit Einschränkung erfüllt",
+                    "🔴": "nicht erfüllt"}[zeichen]
+            zeilen.append(f"- {nr} {erg.get('titel', '')}: {wort}")
+        zeilen.append("")
+        zeilen.append(f"Geprüft wurden {k['abschnitte']} Normabschnitte. Das Prüfverfahren hat "
+                      f"{k['einwaende']} begründete Zweifel erzeugt. Davon wurden "
+                      f"{k['ausgeraeumt']} ausgeräumt, {k['abweichungen']} als Abweichung und "
+                      f"{k['potenziale']} als Verbesserungspotenzial bestätigt, "
+                      f"{k['offen']} bleiben zur Prüfung vor Ort offen.")
+        return "\n".join(zeilen)
+    if schluessel == "begruendung":
+        if k["abweichungen"] == 0:
+            return ("Die geprüften Anforderungen sind erfüllt. Für jede Anforderung lagen "
+                    "Nachweise vor, deren Aussagekraft im Prüfverfahren gezielt angegriffen "
+                    "wurde. Die aufgeworfenen Zweifel konnten mit den vorliegenden Nachweisen "
+                    "ausgeräumt werden.")
+        zahl = k["abweichungen"]
+        wort = "eine Abweichung" if zahl == 1 else f"{zahl} Abweichungen"
+        return (f"Es wurde {wort} festgestellt." if zahl == 1
+                else f"Es wurden {wort} festgestellt.") + (
+                " Die Begründung je Abweichung ist in Abschnitt 6.3 dargestellt. Bitte ergänzen "
+                "Sie hier Ihre zusammenfassende Beurteilung der Systemreife, also ob es sich um "
+                "Einzelfälle oder um eine systematische Schwäche handelt.")
+    if schluessel == "hinweise_text":
+        zeilen = ["Hinweise zeigen Entwicklungspotenziale und Risiken auf. Sie sind auf "
+                  "Relevanz zu prüfen und dienen der fortlaufenden Verbesserung.", ""]
+        for i, u in urteile.items():
+            if u.get("urteil") == "Bestätigt: Verbesserungspotenzial":
+                e = u.get("einwand", {})
+                zeilen.append(f"- {i} (Abschnitt {e.get('abschnitt', '')}): "
+                              f"{e.get('begruendung', '')[:400]}")
+        if len(zeilen) == 2:
+            zeilen.append("- Keine Hinweise.")
+        return "\n".join(zeilen)
+    if schluessel == "empfehlungen_text":
+        return ("Empfehlungen sollen einen Nutzen für die Organisation stiften und stellen keine "
+                "Abweichung dar. Die Umsetzung liegt im Ermessen der Organisation.\n"
+                "- Bitte ergänzen.")
+    if schluessel == "schlusswort":
+        offen = [f"{i}: {u.get('einwand', {}).get('pruefung_vor_ort', '')}"
+                 for i, u in urteile.items() if u.get("urteil") == "Offen: vor Ort prüfen"]
+        text = [audit.get("fazit", "").strip(),
+                f"Die Bewertung beruht auf {audit.get('norm', 'der Norm')} und auf den Leitlinien "
+                "für Managementsystemaudits nach ISO 19011.",
+                "Das Audit wurde durch ein dialektisches KI-Prüfverfahren unterstützt. Ein "
+                "Agententeam hat den Konformitätsnachweis konstruiert, ein zweites hat ihn "
+                "angegriffen. Über jeden verbliebenen Zweifel hat der Auditor entschieden und "
+                "diese Entscheidung begründet."]
+        if offen:
+            text.append("Folgende Punkte konnten anhand der Unterlagen nicht abschliessend "
+                        "beurteilt werden und sind vor Ort zu prüfen:")
+            text += [f"- {o}" for o in offen]
+        return "\n".join(t for t in text if t)
+    if schluessel == "veraenderungen_org":
+        return ("Bitte ergänzen: organisatorische und personelle Veränderungen seit dem letzten "
+                "Audit, etwa neue Funktionen, Wechsel in der Prozessverantwortung, "
+                "Umstrukturierungen. Bei unveränderter Lage: Die Organisation ist unverändert.")
+    if schluessel == "veraenderungen_prozess":
+        return ("Bitte ergänzen: neue oder geänderte Prozesse, Produkte, Dienstleistungen, "
+                "Anlagen oder IT-Systeme im geprüften Bereich. Bei unveränderter Lage: "
+                "Der Prozess ist unverändert.")
+    if schluessel == "kennzahlen_entwicklung":
+        zahlen = [n for n in audit.get("notizen", []) if n.get("typ") == "Leistungsdaten"]
+        if zahlen:
+            return "\n".join(f"{n.get('quelle', '')} ({n.get('datum', '')}): {n.get('text', '')}"
+                              for n in zahlen)
+        return ("Bitte ergänzen: Entwicklung der relevanten Kennzahlen, etwa Mengen, "
+                "Reklamationen, Termintreue, Ausschuss oder Durchlaufzeiten, mit Vergleich zur "
+                "Vorperiode. Leistungsdaten können im Reiter Durchführung erfasst werden, dann "
+                "erscheinen sie hier automatisch.")
+    if schluessel == "erledigung_vorjahr":
+        return ("Bitte ergänzen: Stand der Korrekturmassnahmen aus früheren Audits und Bewertung "
+                "ihrer Wirksamkeit. Bei erstmaligem Audit oder ohne Vorbefunde: Im letzten Audit "
+                "wurden keine Abweichungen festgestellt.")
+    if schluessel == "umgang_hinweise":
+        return ("Bitte ergänzen: welche Hinweise aus früheren Berichten aufgegriffen wurden und "
+                "welche offen bleiben. Bei erstmaligem Audit: Nicht zutreffend.")
+    if schluessel == "qualitaetsinitiativen":
+        return ("Bitte ergänzen: Projekte, Evaluationen und Verbesserungen, die die Organisation "
+                "aus eigener Initiative angestossen hat, einschliesslich der daraus abgeleiteten "
+                "Massnahmen.")
+    if schluessel == "selbstbewertung":
+        return ("Bitte ergänzen: wie die Organisation ihren eigenen Erfüllungsgrad einschätzt und "
+                "ob diese Selbsteinschätzung mit dem Auditbefund übereinstimmt. Eine Abweichung "
+                "zwischen Selbstbild und Befund ist selbst ein Auditergebnis.")
+    if schluessel == "naechste_pruefung":
+        return ("Nächstes internes Audit dieses Prozesses: noch festzulegen.\n"
+                "Schwerpunkte: Wirksamkeit der vereinbarten Korrekturmassnahmen"
+                + (" sowie die oben offen gebliebenen Punkte." if k["offen"] else "."))
+    if schluessel == "antrag":
+        if k["abweichungen"] == 0:
+            return ("Der Auditor empfiehlt der Leitung, die Konformität des geprüften Prozesses "
+                    "zu bestätigen. Auflagen sind nicht erforderlich. Die Hinweise sollten im "
+                    "Rahmen der fortlaufenden Verbesserung aufgegriffen werden.")
+        return ("Der Auditor empfiehlt der Leitung, die festgestellten Abweichungen mit "
+                "Korrekturmassnahmen zu belegen und deren Wirksamkeit innerhalb der "
+                "vereinbarten Fristen nachzuweisen. Der Bericht ist in der nächsten "
+                "Managementbewertung zu behandeln.")
+    return ""
+
+
+def felder_fuellen(audit: dict, nur_leere: bool = True):
+    """Belegt die Berichtsfelder vor. Vom Auditor geaenderte Texte bleiben erhalten."""
+    felder = audit.setdefault("bericht_felder", {})
+    for schluessel, _, _, _ in BERICHT_FELDER:
+        if nur_leere and felder.get(schluessel, "").strip():
+            continue
+        felder[schluessel] = feld_vorbelegung(audit, schluessel)
+    return felder
+
+
+def abweichungen_sortiert(audit: dict):
+    """Teilt die bestaetigten Abweichungen in wesentliche und geringfuegige."""
+    fest = {f.get("einwand"): f for f in
+            audit.get("feststellungen", {}).get("feststellungen", [])}
+    mass = {}
+    for m in audit.get("massnahmen", []):
+        mass.setdefault(m.get("feststellung"), m)
+    major, minor = [], []
+    for i, u in audit.get("urteile", {}).items():
+        if u.get("urteil") != "Bestätigt: Abweichung":
+            continue
+        e = u.get("einwand", {})
+        r = e.get("zertifizierungsrisiko") or {}
+        klass = str(r.get("klassifizierung", "")).lower()
+        schwer = ("haupt" in klass or "major" in klass or e.get("schwere") == "hoch")
+        eintrag = {"id": i, "abschnitt": e.get("abschnitt", ""),
+                   "feststellung": fest.get(i, {}).get("feststellung", e.get("begruendung", "")),
+                   "anforderung": fest.get(i, {}).get("anforderung", ""),
+                   "nachweis": fest.get(i, {}).get("objektiver_nachweis", ""),
+                   "urteil_begruendung": u.get("begruendung", ""),
+                   "massnahme": mass.get(i, {}).get("beschreibung", ""),
+                   "sofort": mass.get(i, {}).get("sofortmassnahme", ""),
+                   "verantwortlich": mass.get(i, {}).get("verantwortlich", ""),
+                   "termin": mass.get(i, {}).get("termin", ""),
+                   "wirksamkeit": mass.get(i, {}).get("wirksamkeitsnachweis", "")}
+        (major if schwer else minor).append(eintrag)
+    return major, minor
+
+
+# ---------------------------------------------------------------------------
+# Word-Bericht nach dem Schema eines Auditkurzberichts
+# ---------------------------------------------------------------------------
+def bericht_docx(audit: dict) -> bytes:
+    from docx import Document as NeuesDok
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, RGBColor
+
+    f = audit.get("bericht_felder", {})
+    k = kennzahlen(audit)
+    urteile = audit.get("urteile", {})
+    major, minor = abweichungen_sortiert(audit)
+    d = NeuesDok()
+
+    stil = d.styles["Normal"]
+    stil.font.name = "Calibri"
+    stil.font.size = Pt(10.5)
+
+    def absatz(text="", stilname=None, fett=False, kursiv=False, groesse=None):
+        p = d.add_paragraph(style=stilname) if stilname else d.add_paragraph()
+        for i, zeile in enumerate(str(text).split("\n")):
+            lauf = p.add_run(("\n" if i else "") + zeile)
+            lauf.bold = fett
+            lauf.italic = kursiv
+            if groesse:
+                lauf.font.size = Pt(groesse)
+        return p
+
+    def feldtext(schluessel, ersatz="Nicht ausgefüllt."):
+        wert = str(f.get(schluessel, "")).strip()
+        if not wert:
+            absatz(ersatz, kursiv=True)
+            return
+        for zeile in wert.split("\n"):
+            z = zeile.strip()
+            if not z:
+                continue
+            if z.startswith("- "):
+                d.add_paragraph(z[2:], style="List Bullet")
+            else:
+                absatz(z)
+
+    def tabelle(zeilen, breit=None):
+        t = d.add_table(rows=0, cols=2)
+        t.style = "Table Grid"
+        t.alignment = WD_TABLE_ALIGNMENT.LEFT
+        for name, wert in zeilen:
+            r = t.add_row().cells
+            r[0].text = str(name)
+            for p in r[0].paragraphs:
+                for lauf in p.runs:
+                    lauf.bold = True
+            r[1].text = str(wert)
+        d.add_paragraph()
+        return t
+
+    # ---------------- Titelseite
+    titel = absatz(f"Bericht zum internen Audit", groesse=20, fett=True)
+    titel.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    absatz(f"{audit.get('norm', '')}", groesse=14, fett=True)
+    absatz()
+    absatz(audit.get("titel", ""), groesse=14, fett=True)
+    absatz(ORGANISATION or "", groesse=12)
+    absatz()
+    tabelle([("Audit", audit.get("titel", "")),
+             ("Auditierter Prozess oder Bereich", audit.get("prozess", "")),
+             ("Normative Grundlage", audit.get("norm", "")),
+             ("Geprüfte Normabschnitte", ", ".join(audit.get("kriterien", []))),
+             ("Bedeutung und Risiko des Prozesses", audit.get("risiko", "")),
+             ("Audittermin", audit.get("termin", "")),
+             ("Auditor", audit.get("auditor", "")),
+             ("Unparteilichkeit bestätigt",
+              "ja, der Auditor prüft nicht die eigene Arbeit"
+              if audit.get("unparteilich") else "nicht bestätigt"),
+             ("Auditierte Funktion", audit.get("auditierte", "")),
+             ("Berichtsdatum", f"{date.today():%d.%m.%Y}"),
+             ("Auditkennung", audit.get("id", ""))])
+    absatz("Verfasser", fett=True)
+    absatz(audit.get("auditor", ""))
+    d.add_page_break()
+
+    # Inhaltsverzeichnis als Word-Feld. Word fuellt es beim Oeffnen mit F9.
+    d.add_heading("Inhaltsverzeichnis", level=1)
+    p = d.add_paragraph()
+    lauf = p.add_run()
+    anfang = OxmlElement("w:fldChar")
+    anfang.set(qn("w:fldCharType"), "begin")
+    anweisung = OxmlElement("w:instrText")
+    anweisung.set(qn("xml:space"), "preserve")
+    anweisung.text = r'TOC \o "1-3" \h \z \u'
+    trenner = OxmlElement("w:fldChar")
+    trenner.set(qn("w:fldCharType"), "separate")
+    platzhalter = OxmlElement("w:t")
+    platzhalter.text = ("Inhaltsverzeichnis. In Word mit der rechten Maustaste darauf klicken "
+                        "und Felder aktualisieren wählen.")
+    schluss = OxmlElement("w:fldChar")
+    schluss.set(qn("w:fldCharType"), "end")
+    for teil in (anfang, anweisung, trenner, platzhalter, schluss):
+        lauf._r.append(teil)
+    d.add_page_break()
+
+    # ---------------- 1 Allgemeine Informationen
+    d.add_heading("1  Allgemeine Informationen", level=1)
+    d.add_heading("1.1  Zielsetzung des Audits", level=2)
+    feldtext("ziel_audit")
+    d.add_heading("1.2  Auditierter Prozess oder Bereich", level=2)
+    feldtext("dienstleistung")
+    d.add_heading("1.3  Organisation und Ansprechpartner", level=2)
+    feldtext("institution")
+    d.add_heading("1.4  Auditzeitplan", level=2)
+    feldtext("zeitplan")
+    d.add_heading("1.5  Geprüfter Standort", level=2)
+    feldtext("standort")
+    d.add_heading("1.6  Eingereichte Unterlagen", level=2)
+    feldtext("unterlagen")
+    d.add_heading("1.7  Haftungsausschluss", level=2)
+    feldtext("haftung")
+    d.add_heading("1.8  Verteiler", level=2)
+    feldtext("verteiler")
+
+    d.add_heading("2  Geltungsbereich", level=1)
+    feldtext("geltungsbereich")
+    d.add_heading("3  Begriffe", level=1)
+    feldtext("begriffe")
+
+    # ---------------- 4 Auswertung
+    d.add_heading("4  Auswertung der Organisation und des Prozesses", level=1)
+    for schluessel, nummer, name in [
+            ("veraenderungen_org", "4.1", "Wichtige Veränderungen in der Organisation"),
+            ("veraenderungen_prozess", "4.2", "Veränderungen am Prozess oder Angebot"),
+            ("kennzahlen_entwicklung", "4.3", "Entwicklung der relevanten Kennzahlen"),
+            ("erledigung_vorjahr", "4.4", "Erledigungsnachweise früherer Korrekturmassnahmen"),
+            ("umgang_hinweise", "4.5", "Umgang mit Hinweisen aus früheren Berichten"),
+            ("qualitaetsinitiativen", "4.6", "Eigene Qualitätsinitiativen"),
+            ("selbstbewertung", "4.7", "Selbstbewertung der Organisation")]:
+        d.add_heading(f"{nummer}  {name}", level=2)
+        feldtext(schluessel)
+
+    # ---------------- 5 Auditprozess
+    d.add_heading("5  Zusammenfassung des Auditprozesses und der geprüften Inhalte", level=1)
+    d.add_heading("5.1  Ausführungen", level=2)
+    d.add_heading("5.1.1  Regelkreis Führung und Qualitätsmanagement", level=3)
+    feldtext("regelkreis_fuehrung")
+    d.add_heading("5.1.2  Regelkreis Leistungserbringung und Unterstützung", level=3)
+    feldtext("regelkreis_leistung")
+    d.add_heading("5.1.3  Angewandtes Prüfverfahren", level=3)
+    absatz("Die Dokumentenanalyse wurde durch ein Mehragentensystem unterstützt. "
+           f"{agent_name(audit, 'pro')} hat je Normabschnitt den Konformitätsnachweis "
+           f"konstruiert, {agent_name(audit, 'contra')} hat diesen Nachweis angegriffen und "
+           "nach widersprechenden Nachweisen und ungestützten Annahmen gesucht. Jedes Zitat "
+           "wurde maschinell gegen die Quelldatei geprüft. Über jeden verbliebenen Zweifel hat "
+           "der Auditor entschieden und die Entscheidung begründet.")
+    tabelle([("Geprüfte Normabschnitte", k["abschnitte"]),
+             ("Erzeugte Zweifel", k["einwaende"]),
+             ("Davon durch den Auditor ausgeräumt", k["ausgeraeumt"]),
+             ("Als Abweichung bestätigt", k["abweichungen"]),
+             ("Als Verbesserungspotenzial bestätigt", k["potenziale"]),
+             ("Zur Prüfung vor Ort offen", k["offen"]),
+             ("Zitate in der Quelle wiedergefunden",
+              f"{k['zitate_belegt']} von {k['zitate']}")])
+    d.add_heading("5.2  Eröffnungs- und Abschlussgespräch", level=2)
+    feldtext("gespraeche")
+
+    # ---------------- 6 Auditergebnis
+    d.add_heading("6  Auditergebnis", level=1)
+    d.add_heading("6.1  Erfüllung der geprüften Normabschnitte", level=2)
+    t = d.add_table(rows=1, cols=3)
+    t.style = "Table Grid"
+    kopf = t.rows[0].cells
+    for i, name in enumerate(["Normabschnitt", "Ergebnis", "Befund"]):
+        kopf[i].text = name
+        for p in kopf[i].paragraphs:
+            for lauf in p.runs:
+                lauf.bold = True
+    for nr, erg in audit.get("analysen", {}).items():
+        zeichen, lage = ampel_abschnitt(erg, urteile)
+        wort = {"🟢": "erfüllt", "🟡": "mit Einschränkung erfüllt",
+                "🔴": "nicht erfüllt"}[zeichen]
+        r = t.add_row().cells
+        r[0].text = f"{nr} {erg.get('titel', '')}"
+        r[1].text = wort
+        r[2].text = lage
+    d.add_paragraph()
+    feldtext("erfuellung", "")
+    d.add_heading("6.2  Begründung", level=2)
+    feldtext("begruendung")
+
+    d.add_heading("6.3  Abweichungen und Korrekturmassnahmen", level=2)
+    absatz("Eine Abweichung bezeichnet eine im Audit festgestellte Nichterfüllung einer "
+           "Anforderung und ist mit einer Korrekturmassnahme zu belegen. Unterschieden werden "
+           "wesentliche und geringfügige Abweichungen.")
+
+    def abweichungsblock(titel, nummer, liste, frist_hinweis, leertext):
+        d.add_heading(f"{nummer}  {titel}", level=3)
+        if not liste:
+            absatz(leertext)
+            return
+        for a in liste:
+            absatz(f"{a['id']} · Normabschnitt {a['abschnitt']}", fett=True)
+            tabelle([("Anforderung", a["anforderung"]),
+                     ("Objektiver Nachweis", a["nachweis"]),
+                     ("Feststellung", a["feststellung"]),
+                     ("Begründung des Auditors", a["urteil_begruendung"]),
+                     ("Sofortmassnahme", a["sofort"]),
+                     ("Korrekturmassnahme", a["massnahme"]),
+                     ("Verantwortlich", a["verantwortlich"]),
+                     ("Termin", a["termin"]),
+                     ("Nachweis der Wirksamkeit", a["wirksamkeit"])])
+        absatz(frist_hinweis, kursiv=True)
+
+    absatz("Eine wesentliche Abweichung liegt vor, wenn eine Anforderung systematisch oder "
+           "vollständig nicht erfüllt ist. Eine geringfügige Abweichung ist ein Einzelfall oder "
+           "eine formale Lücke ohne Systemversagen.", kursiv=True, groesse=9)
+    abweichungsblock("Wesentliche Abweichungen mit Korrekturmassnahmen", "6.3.1", major,
+                     "Nachweise zu den Korrekturmassnahmen sind termingerecht vorzulegen. "
+                     "Die Wirksamkeit wird nachverfolgt.",
+                     "Es wurden keine wesentlichen Abweichungen festgestellt.")
+    abweichungsblock("Geringfügige Abweichungen mit Korrekturmassnahmen", "6.3.2", minor,
+                     "Die Erledigung wird in der Regel beim nächsten Audit geprüft.",
+                     "Es wurden keine geringfügigen Abweichungen festgestellt.")
+    d.add_heading("6.3.3  Hinweise", level=3)
+    feldtext("hinweise_text")
+    d.add_heading("6.3.4  Empfehlungen", level=3)
+    feldtext("empfehlungen_text")
+    d.add_heading("6.4  Schlusswort", level=2)
+    feldtext("schlusswort")
+
+    # ---------------- 7 Planung
+    d.add_heading("7  Planung der nächsten Überprüfung", level=1)
+    feldtext("naechste_pruefung")
+
+    # ---------------- 8 Antrag und Unterschriften
+    d.add_heading("8  Antrag an die Leitung und Freigabe", level=1)
+    feldtext("antrag")
+    absatz()
+    tabelle([("Auditor", f"{audit.get('auditor', '')}, Datum: ______________"),
+             ("Unterschrift Auditor", "______________________________"),
+             ("Zur Kenntnis genommen, Leitung des Bereichs", "______________________________"),
+             ("Zur Kenntnis genommen, oberste Leitung", "______________________________")])
+    absatz("Dieser Bericht ist als dokumentierte Information aufzubewahren "
+           "(ISO 9001, Abschnitte 9.2 und 7.5).", kursiv=True, groesse=9)
+
+    # ---------------- Anhang
+    d.add_page_break()
+    d.add_heading("Anhang A  Ausgeräumte Zweifel als Nachweis der Prüftiefe", level=1)
+    absatz("Diese Zweifel wurden im Prüfverfahren erzeugt und vom Auditor mit Begründung "
+           "ausgeräumt. Sie dokumentieren die Tiefe der Prüfung.")
+    ausger = [(i, u) for i, u in urteile.items() if u.get("urteil") == "Ausgeräumt"]
+    if not ausger:
+        absatz("Keine.")
+    for i, u in ausger:
+        e = u.get("einwand", {})
+        absatz(f"{i} · Normabschnitt {e.get('abschnitt', '')}", fett=True)
+        absatz(f"Zweifel: {e.get('begruendung', '')}")
+        absatz(f"Begründung der Ausräumung: {u.get('begruendung', '')}")
+        absatz()
+
+    d.add_heading("Anhang B  Zur Prüfung vor Ort offene Punkte", level=1)
+    offen = [(i, u) for i, u in urteile.items() if u.get("urteil") == "Offen: vor Ort prüfen"]
+    if not offen:
+        absatz("Keine.")
+    for i, u in offen:
+        e = u.get("einwand", {})
+        v = e.get("pruefung_vor_ort")
+        v = v if isinstance(v, list) else ([v] if v else [])
+        absatz(f"{i} · Normabschnitt {e.get('abschnitt', '')}", fett=True)
+        absatz(f"Offener Zweifel: {e.get('begruendung', '')}")
+        for schritt in v:
+            d.add_paragraph(str(schritt), style="List Bullet")
+        absatz()
+
+    puffer = io.BytesIO()
+    d.save(puffer)
+    return puffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Oberflaeche
 # ---------------------------------------------------------------------------
 kataloge = normkataloge_laden()
@@ -1263,7 +1820,7 @@ elif bereich.startswith("Do"):
             st.info("Der Bericht entsteht, sobald Sie alle Zweifel beurteilt haben.")
         else:
             st.caption("Check. Der Bericht geht an die zuständige Leitung und wird als "
-                       "dokumentierte Information aufbewahrt.")
+                       "dokumentierte Information aufbewahrt (ISO 9001, Abschnitte 9.2 und 7.5).")
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Abweichungen", k["abweichungen"])
             s2.metric("Potenziale", k["potenziale"])
@@ -1275,23 +1832,98 @@ elif bereich.startswith("Do"):
                           for nr, erg in audit.get("analysen", {}).items()],
                          use_container_width=True, hide_index=True)
             audit["fazit"] = st.text_area(
-                "Fazit des Auditors (erscheint im Bericht)", value=audit.get("fazit", ""),
-                height=110, help="Ihre Gesamteinschätzung. Die Maschine schreibt sie nicht.")
-            s1, s2, s3 = st.columns(3)
-            s1.download_button("Bericht als Webseite (HTML)", bericht_html(audit),
+                "Fazit des Auditors", value=audit.get("fazit", ""), height=100,
+                help="Ihre Gesamteinschätzung. Sie fliesst in das Schlusswort des Berichts ein.")
+
+            st.divider()
+            st.markdown("### Berichtsformular")
+            st.caption("Das Formular folgt dem Aufbau eines Auditkurzberichts. Alle Felder sind "
+                       "aus Ihren Daten vorbelegt und von Ihnen überschreibbar. Was Sie hier "
+                       "ändern, steht genau so im Word-Bericht.")
+            audit.setdefault("bericht_felder", {})
+            s1, s2 = st.columns(2)
+            if s1.button("Leere Felder vorbelegen", use_container_width=True):
+                felder_fuellen(audit, nur_leere=True)
+                st.rerun()
+            if s2.button("Alle Felder neu vorbelegen", use_container_width=True,
+                         help="Überschreibt auch Ihre eigenen Texte."):
+                felder_fuellen(audit, nur_leere=False)
+                st.rerun()
+            if not any(v.strip() for v in audit["bericht_felder"].values()):
+                felder_fuellen(audit, nur_leere=True)
+
+            gruppen = [("1  Allgemeine Informationen",
+                        ["ziel_audit", "dienstleistung", "institution", "zeitplan", "standort",
+                         "unterlagen", "haftung", "verteiler"]),
+                       ("2 und 3  Geltungsbereich und Begriffe",
+                        ["geltungsbereich", "begriffe"]),
+                       ("4  Auswertung der Organisation und des Prozesses",
+                        ["veraenderungen_org", "veraenderungen_prozess",
+                         "kennzahlen_entwicklung", "erledigung_vorjahr", "umgang_hinweise",
+                         "qualitaetsinitiativen", "selbstbewertung"]),
+                       ("5  Auditprozess und geprüfte Inhalte",
+                        ["regelkreis_fuehrung", "regelkreis_leistung", "gespraeche"]),
+                       ("6  Auditergebnis",
+                        ["erfuellung", "begruendung", "hinweise_text", "empfehlungen_text",
+                         "schlusswort"]),
+                       ("7 und 8  Planung und Antrag",
+                        ["naechste_pruefung", "antrag"])]
+            beschriftung = {sch: (lab, hilfe, hoehe)
+                            for sch, lab, hilfe, hoehe in BERICHT_FELDER}
+            for gruppentitel, schluessel_liste in gruppen:
+                with st.expander(gruppentitel, expanded=False):
+                    for sch in schluessel_liste:
+                        lab, hilfe, hoehe = beschriftung[sch]
+                        audit["bericht_felder"][sch] = st.text_area(
+                            lab, value=audit["bericht_felder"].get(sch, ""), height=hoehe,
+                            help=hilfe, key=f"bf_{audit['id']}_{sch}")
+
+            major, minor = abweichungen_sortiert(audit)
+            st.markdown("**Abweichungen im Bericht**")
+            st.caption("Die Einteilung ergibt sich aus Ihrem Urteil und aus der Prognose des "
+                       "Falsifikationsteams zum externen Audit. Wesentlich heisst, dass eine "
+                       "Anforderung systematisch oder vollständig nicht erfüllt ist.")
+            s1, s2 = st.columns(2)
+            s1.metric("Wesentliche Abweichungen", len(major))
+            s2.metric("Geringfügige Abweichungen", len(minor))
+            if major or minor:
+                st.dataframe(
+                    [{"Art": art, "ID": a["id"], "Abschnitt": a["abschnitt"],
+                      "Feststellung": a["feststellung"][:160],
+                      "Korrekturmassnahme": a["massnahme"][:120],
+                      "Verantwortlich": a["verantwortlich"], "Termin": a["termin"]}
+                     for art, liste in [("wesentlich", major), ("geringfügig", minor)]
+                     for a in liste],
+                    use_container_width=True, hide_index=True)
+            if any(not a["massnahme"] for a in major + minor):
+                st.warning("Zu mindestens einer Abweichung fehlt noch eine Korrekturmassnahme. "
+                           "Ergänzen Sie sie im Reiter Massnahmen, sonst bleibt die Tabelle "
+                           "im Bericht leer.")
+
+            st.divider()
+            st.markdown("### Bericht herunterladen")
+            s1, s2 = st.columns(2)
+            s1.download_button(
+                "Auditbericht als Word-Datei", bericht_docx(audit),
+                file_name=f"Auditbericht_{audit.get('prozess', 'Prozess')}_{audit['id']}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                type="primary", use_container_width=True)
+            s2.download_button("Bericht als Webseite (HTML)", bericht_html(audit),
                                file_name=f"auditbericht_{audit['id']}.html", mime="text/html",
                                use_container_width=True)
-            s2.download_button("Bericht als Text (Markdown)", bericht_markdown(audit),
+            s1.caption("Vollständiger Bericht nach dem Schema, in Word weiter bearbeitbar.")
+            s2.caption("Kurzfassung zum Ansehen, über Drucken als PDF speicherbar.")
+            s3, s4 = st.columns(2)
+            s3.download_button("Bericht als Text (Markdown)", bericht_markdown(audit),
                                file_name=f"auditbericht_{audit['id']}.md",
                                use_container_width=True)
             trail = {kk: vv for kk, vv in audit.items() if kk != "dokumente"}
             trail["nachweise"] = list(audit.get("dokumente", {}))
-            s3.download_button("Audit Trail (JSON)",
+            s4.download_button("Audit Trail (JSON)",
                                json.dumps(trail, ensure_ascii=False, indent=2),
                                file_name=f"audit_trail_{audit['id']}.json",
                                use_container_width=True)
-            st.caption("Die HTML-Fassung lässt sich im Browser über Drucken als PDF speichern.")
-            with st.expander("Bericht ansehen"):
+            with st.expander("Kurzfassung ansehen"):
                 st.markdown(bericht_markdown(audit))
 
     # ---------------- 6 Massnahmen (Act)
