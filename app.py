@@ -60,8 +60,6 @@ def audix(text: str, breit: bool = False):
         st.markdown(text)
 
 HINWEISE = f"""
-**Was Audix für Sie tut und was nicht**
-
 - Audix bereitet vor und prüft, er entscheidet nicht. Jede Feststellung und ihre
   Einstufung verantwortet der Auditor.
 - Ihre Unterlagen werden zur Auswertung an den Dienst {PROVIDER or 'des eingestellten Anbieters'}
@@ -237,23 +235,28 @@ MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt", "nicht wi
 def anmeldung() -> bool:
     if st.session_state.get("auth_ok"):
         return True
-    links, rechts = st.columns([1, 2])
-    with links:
+    rand_l, mitte, rand_r = st.columns([1, 2, 1])
+    with mitte:
         if LOGO.exists():
-            st.image(str(LOGO), width=300)
-    with rechts:
-        st.title(APP_NAME)
-        st.subheader(APP_CLAIM)
-        st.write("Bitte Zugangspasswort eingeben.")
-    with st.expander("Hinweise zur Nutzung", expanded=True):
-        st.markdown(HINWEISE)
-    pw = st.text_input("Passwort", type="password")
-    if st.button("Anmelden", type="primary"):
-        if pw and pw == st.secrets.get("APP_PASSWORD", ""):
-            st.session_state.auth_ok = True
-            st.rerun()
+            bild_l, bild_m, bild_r = st.columns([1, 2, 1])
+            with bild_m:
+                st.image(str(LOGO), use_container_width=True)
         else:
-            st.error("Das Passwort stimmt nicht.")
+            st.title(APP_NAME)
+        st.markdown(
+            f"<p style='text-align:center;font-size:1.1rem;color:#4a5a68;margin-top:-.5rem'>"
+            f"{APP_CLAIM}</p>", unsafe_allow_html=True)
+        st.write("")
+        pw = st.text_input("Zugangspasswort", type="password",
+                           placeholder="Passwort eingeben")
+        if st.button("Anmelden", type="primary", use_container_width=True):
+            if pw and pw == st.secrets.get("APP_PASSWORD", ""):
+                st.session_state.auth_ok = True
+                st.rerun()
+            else:
+                st.error("Das Passwort stimmt nicht.")
+        with st.expander("Was Audix tut und was nicht"):
+            st.markdown(HINWEISE)
     return False
 
 
@@ -1266,14 +1269,15 @@ def bericht_docx(audit: dict) -> bytes:
 kataloge = normkataloge_laden()
 audits = st.session_state.audits
 
-kopf_bild, kopf_text = st.columns([1, 9])
+kopf_bild, kopf_text = st.columns([1, 11])
 with kopf_bild:
     if AVATAR.exists():
-        st.image(str(AVATAR), width=86)
+        st.image(str(AVATAR), width=76)
 with kopf_text:
-    st.title(APP_NAME)
-    st.caption(APP_CLAIM + ((" · " + ORGANISATION) if ORGANISATION else "")
-               + " · Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
+    st.markdown(f"## {APP_NAME}")
+    st.caption(((ORGANISATION + " · ") if ORGANISATION else "")
+               + "Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
+st.divider()
 
 with st.sidebar:
     bereich = st.radio("Bereich", ["Plan · Auditprogramm", "Do und Check · Einzelaudit",
