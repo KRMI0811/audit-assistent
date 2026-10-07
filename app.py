@@ -64,7 +64,8 @@ Verantwortung für jede Feststellung, nicht die Maschine.
 4. **Act** · Massnahmen festlegen und ihre Wirksamkeit nachverfolgen.
 
 Oben rechts findest du auf jedem Reiter den Knopf **Audix fragen**. Dort erkläre ich dir, was
-an dieser Stelle zu tun ist. Fangen wir an."""
+an dieser Stelle zu tun ist, und dort kannst du mir auch direkt Fragen stellen. Ich kenne deinen
+Arbeitsstand, du musst mir also nicht erklären, wo du gerade stehst. Fangen wir an."""
 
 AUDIX_HILFE = {
     "programm": """**Hier fängt alles an.**
@@ -199,9 +200,117 @@ und wirksam abgeschlossen wurden, sagt mehr über euer QM-System aus als die Zah
 Abweichungen."""}
 
 
+AUDIX_CHAT_SYSTEM = """Du bist Audix, ein freundlicher und fachlich präziser Begleiter für
+interne Audits nach ISO 9001. Du sprichst die auditierende Person mit Du an.
+
+Was du kannst
+- Normanforderungen von ISO 9001 und Auditmethodik nach ISO 19011 erklären.
+- Erklären, wie diese Anwendung funktioniert und was an der aktuellen Stelle zu tun ist.
+- Beim Formulieren von Feststellungen, Auditfragen und Korrekturmassnahmen helfen.
+- Einschätzen, welche Nachweise für eine Anforderung üblicherweise gebraucht werden.
+
+Deine Regeln
+1. Du triffst keine Auditfeststellungen und stufst nichts ein. Das ist Sache des Auditors.
+   Wenn jemand das von dir verlangt, sagst du freundlich, dass du nur vorbereiten kannst.
+2. Du erfindest keine Normzitate und keine Abschnittsnummern. Wenn du unsicher bist, sagst du
+   das offen und verweist auf den lizenzierten Normtext.
+3. Du antwortest kurz, höchstens fünf Sätze oder eine kurze Liste. Keine langen Vorreden.
+4. Du beziehst dich auf den Arbeitsstand, der dir im Kontext mitgegeben wird, wenn er zur Frage
+   passt. Erfinde keine Daten, die dort nicht stehen.
+5. Du schreibst auf Deutsch in Schweizer Rechtschreibung, also ss statt ß."""
+
+
+def llm_text(modell: str, system: str, verlauf: list) -> str:
+    """Freie Textantwort fuer den Chat. Gibt bei Fehlern eine lesbare Meldung zurueck."""
+    nutzlast = {"model": modell, "temperature": 0.4, "max_tokens": 700, "stream": False,
+                "messages": [{"role": "system", "content": system}] + verlauf}
+    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    try:
+        r = requests.post(f"{API_BASE}/chat/completions", headers=kopf, json=nutzlast,
+                          timeout=(15, 180))
+    except requests.exceptions.Timeout:
+        return "Da habe ich zu lange gebraucht. Stell die Frage bitte noch einmal."
+    except requests.RequestException as f:
+        return f"Ich komme gerade nicht an mein Sprachmodell heran ({f})."
+    if r.status_code != 200:
+        return (f"Mein Sprachmodell antwortet nicht (HTTP {r.status_code}). "
+                "Bitte später erneut versuchen.")
+    inhalt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+    return inhalt or "Dazu fällt mir gerade nichts ein. Frag mich bitte anders."
+
+
+def audix_kontext(schluessel: str) -> str:
+    """Beschreibt Audix, wo der Auditor gerade steht und woran er arbeitet."""
+    phasen = {"programm": "Auditprogramm des Jahres (Phase Plan)",
+              "vorbereitung": "Auditvorbereitung und Auditteam (Phase Plan)",
+              "durchfuehrung": "Durchführung, Sammeln der Nachweise (Phase Do)",
+              "pruefung": "Dialektische Prüfung durch die Agententeams (Phase Check)",
+              "urteil": "Urteil des Auditors über die Zweifel (Phase Check)",
+              "bericht": "Auditbericht (Phase Check)",
+              "massnahmen": "Korrekturmassnahmen (Phase Act)",
+              "nachverfolgung": "Nachverfolgung der Wirksamkeit (Phase Act)"}
+    zeilen = [f"Die Person befindet sich hier: {phasen.get(schluessel, schluessel)}."]
+    a = st.session_state.get("aktuelles_audit")
+    if isinstance(a, dict):
+        kz = kennzahlen(a)
+        def mz(anzahl, eins, viele):
+            return f"{anzahl} {eins if anzahl == 1 else viele}"
+
+        zeilen += [
+            f"Aktuelles Audit: {a.get('titel', '')}, Prozess {a.get('prozess', '')}.",
+            f"Norm {a.get('norm', '')}, geprüfte Abschnitte "
+            f"{', '.join(a.get('kriterien', [])) or 'noch keine'}.",
+            "Stand: " + ", ".join([
+                mz(len(a.get("dokumente", {})), "Dokument", "Dokumente"),
+                mz(len(a.get("notizen", [])), "Notiz", "Notizen"),
+                mz(kz["abschnitte"], "analysierter Abschnitt", "analysierte Abschnitte"),
+                mz(kz["einwaende"], "Zweifel", "Zweifel") + f", davon {kz['beurteilt']} beurteilt"]) + ".",
+            f"Bestätigt sind {mz(kz['abweichungen'], 'Abweichung', 'Abweichungen')} und "
+            f"{mz(kz['potenziale'], 'Verbesserungspotenzial', 'Verbesserungspotenziale')}, "
+            f"{kz['offen']} Punkte bleiben für die Prüfung vor Ort offen."]
+        unbeurteilt = [e for e in alle_einwaende(a)
+                       if not a.get("urteile", {}).get(e["id"], {}).get("urteil")]
+        if unbeurteilt:
+            zeilen.append("Noch unbeurteilte Zweifel: " + "; ".join(
+                f"{e['id']} zu Abschnitt {e.get('abschnitt', '')}: "
+                f"{str(e.get('begruendung', ''))[:180]}" for e in unbeurteilt[:5]))
+    else:
+        zeilen.append("Es ist noch kein einzelnes Audit ausgewählt.")
+    return "\n".join(zeilen)
+
+
+VORSCHLAEGE = {
+    "programm": ["Wie oft muss ich welchen Prozess auditieren?",
+                 "Was gehört in ein Auditprogramm?"],
+    "vorbereitung": ["Welche Unterlagen soll ich anfordern?",
+                     "Wie formuliere ich gute Auditfragen?"],
+    "durchfuehrung": ["Was frage ich im Eröffnungsgespräch?",
+                      "Was ist ein objektiver Nachweis?"],
+    "pruefung": ["Was bedeutet die gelbe Ampel?",
+                 "Worin unterscheiden sich die Einwandtypen?"],
+    "urteil": ["Abweichung oder Verbesserungspotenzial, wie entscheide ich?",
+               "Wie formuliere ich eine Feststellung sauber?"],
+    "bericht": ["Was gehört in die Begründung in 6.2?",
+                "Wesentlich oder geringfügig, was ist der Unterschied?"],
+    "massnahmen": ["Wie finde ich die wirkliche Ursache?",
+                   "Korrektur oder Korrekturmassnahme, was ist was?"],
+    "nachverfolgung": ["Wie prüfe ich die Wirksamkeit einer Massnahme?",
+                       "Was gehört davon in die Managementbewertung?"]}
+
+
+def audix_antworten(frage: str, schluessel: str):
+    """Haengt Frage und Antwort an den Chatverlauf dieser Phase."""
+    verlauf = st.session_state.setdefault("audix_chat", {}).setdefault(schluessel, [])
+    verlauf.append({"role": "user", "content": frage})
+    nachrichten = [{"role": "system", "content": "Arbeitsstand\n" + audix_kontext(schluessel)}]
+    nachrichten += verlauf[-8:]
+    with st.spinner("Audix denkt nach"):
+        antwort = llm_text(MODEL_PRO, AUDIX_CHAT_SYSTEM, nachrichten)
+    verlauf.append({"role": "assistant", "content": antwort})
+
+
 def audix_hilfe(schluessel: str, knopftext: str = "Audix fragen"):
-    """Aufklappbarer Begleiter. Erklaert, was an dieser Stelle zu tun ist."""
-    text = AUDIX_HILFE.get(schluessel, "")
+    """Aufklappbarer Begleiter mit Erklaerung zur Phase und Chat."""
     with st.popover(knopftext, use_container_width=False):
         bild, inhalt = st.columns([1, 4])
         with bild:
@@ -210,7 +319,39 @@ def audix_hilfe(schluessel: str, knopftext: str = "Audix fragen"):
         with inhalt:
             st.markdown(f"#### {APP_NAME}")
             st.caption(APP_CLAIM)
-        st.markdown(text)
+        erklaerung, chat = st.tabs(["Was hier zu tun ist", "Audix fragen"])
+        with erklaerung:
+            st.markdown(AUDIX_HILFE.get(schluessel, ""))
+        with chat:
+            verlauf = st.session_state.get("audix_chat", {}).get(schluessel, [])
+            if not verlauf:
+                st.caption("Frag mich alles zur Norm, zur Auditmethodik oder zu dieser "
+                           "Anwendung. Ich kenne deinen aktuellen Arbeitsstand.")
+                for i, vorschlag in enumerate(VORSCHLAEGE.get(schluessel, [])):
+                    if st.button(vorschlag, key=f"vs_{schluessel}_{i}",
+                                 use_container_width=True):
+                        audix_antworten(vorschlag, schluessel)
+                        st.rerun()
+            for n in verlauf:
+                with st.chat_message("user" if n["role"] == "user" else "assistant",
+                                     avatar=(str(AVATAR) if n["role"] == "assistant"
+                                             and AVATAR.exists() else None)):
+                    st.markdown(n["content"])
+            frage = st.text_area("Deine Frage", key=f"frage_{schluessel}", height=70,
+                                 placeholder="Zum Beispiel: Welche Nachweise brauche ich "
+                                             "für Abschnitt 7.2?", label_visibility="collapsed")
+            s1, s2 = st.columns([3, 1])
+            if s1.button("Fragen", key=f"senden_{schluessel}", type="primary",
+                         use_container_width=True, disabled=not API_KEY):
+                if frage.strip():
+                    audix_antworten(frage.strip(), schluessel)
+                    st.rerun()
+            if verlauf and s2.button("Neu", key=f"reset_{schluessel}",
+                                     use_container_width=True):
+                st.session_state["audix_chat"][schluessel] = []
+                st.rerun()
+            if not API_KEY:
+                st.caption("Ohne hinterlegten API-Schlüssel kann ich nicht antworten.")
 
 
 @st.dialog("Willkommen bei Audix", width="large")
@@ -234,6 +375,8 @@ HINWEISE = f"""
   solange das mit Ihrer IT und dem Datenschutz nicht geklärt ist.
 - Jedes Zitat wird gegen die Quelle geprüft. Ein nicht auffindbares Zitat ist ein Warnzeichen
   und darf nicht in einen Bericht übernommen werden.
+- Im Chat von Audix können Fragen gestellt werden. Auch dort gilt, dass seine Auskünfte den
+  lizenzierten Normtext nicht ersetzen und keine Auditfeststellung darstellen.
 - Der Arbeitsstand liegt nur in dieser Sitzung. Sichern Sie ihn links als Datei.
 """
 
@@ -1475,6 +1618,7 @@ with st.sidebar:
 
 # ================================================================ Plan
 if bereich.startswith("Plan"):
+    st.session_state["aktuelles_audit"] = None
     with kopf_hilfe:
         audix_hilfe("programm")
     st.subheader("Auditprogramm des Jahres")
@@ -1546,6 +1690,7 @@ elif bereich.startswith("Do"):
     with st.sidebar:
         st.subheader("Audit")
         audit = namen[st.selectbox("Audit", list(namen), label_visibility="collapsed")]
+    st.session_state["aktuelles_audit"] = audit
     katalog = kataloge.get(audit.get("norm"))
     if not katalog:
         st.error("Der Normkatalog dieses Audits wurde nicht gefunden.")
@@ -2169,6 +2314,7 @@ elif bereich.startswith("Do"):
 
 # ================================================================ Act
 else:
+    st.session_state["aktuelles_audit"] = None
     with kopf_hilfe:
         audix_hilfe("nachverfolgung")
     st.subheader("Nachverfolgung der Wirksamkeit")
