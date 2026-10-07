@@ -48,16 +48,183 @@ if LOGO.exists():
     st.logo(str(LOGO), size="large")
 
 
-def audix(text: str, breit: bool = False):
-    """Audix meldet sich zu Wort. Kurze Hilfestellung mit Fuchsbild."""
-    if AVATAR.exists():
-        bild, inhalt = st.columns([1, 11] if breit else [1, 7])
+AUDIX_START = """Hallo, ich bin **Audix** und begleite dich durch dein internes Audit.
+
+Mein Trick ist, dass ich nicht nur eine Meinung habe, sondern zwei. Ein Team von mir baut aus
+deinen Unterlagen den bestmöglichen Nachweis, dass eine Normforderung erfüllt ist. Ein zweites
+Team greift genau diesen Nachweis an und sucht nach Lücken. Was danach an Zweifeln übrig bleibt,
+lege ich dir vor. **Entscheiden musst du**, denn nach ISO 19011 trägt der Auditor die
+Verantwortung für jede Feststellung, nicht die Maschine.
+
+**So läuft es ab**
+
+1. **Plan** · Du legst dein Auditprogramm für das Jahr an.
+2. **Do** · Du sammelst Nachweise, also Dokumente, Interviews und Kennzahlen.
+3. **Check** · Meine Teams prüfen, du urteilst, ich schreibe den Berichtsentwurf.
+4. **Act** · Massnahmen festlegen und ihre Wirksamkeit nachverfolgen.
+
+Oben rechts findest du auf jedem Reiter den Knopf **Audix fragen**. Dort erkläre ich dir, was
+an dieser Stelle zu tun ist. Fangen wir an."""
+
+AUDIX_HILFE = {
+    "programm": """**Hier fängt alles an.**
+
+ISO 9001 Abschnitt 9.2 verlangt ein Auditprogramm, das Häufigkeit, Methoden und
+Verantwortlichkeiten festlegt und sich nach Bedeutung und Risiko der Prozesse sowie nach
+früheren Ergebnissen richtet.
+
+**Was du jetzt tust**
+- Lege für jeden Prozess, den du dieses Jahr prüfst, ein Audit an.
+- Stufe die Bedeutung und das Risiko ein, denn danach richtet sich die Prüftiefe.
+- Die Normabschnitte kannst du gleich wählen oder leer lassen, dann schlage ich sie dir später
+  anhand deiner Unterlagen vor.
+
+**Worauf ich achte**
+Ohne bestätigte Unparteilichkeit lasse ich dich kein Audit anlegen. Niemand darf die eigene
+Arbeit auditieren, das ist eine harte Normforderung. Unten zeige ich dir ausserdem, welche
+Normabschnitte im Jahresprogramm noch gar nicht vorkommen.""",
+
+    "vorbereitung": """**Plan. Erst der Plan, dann das Team.**
+
+**Was du jetzt tust**
+- Fülle den Auditplan aus. Daraus wird die Einladung an den Fachbereich.
+- Stelle dein Auditteam zusammen. Du kannst meine Teams umbenennen, ihnen ein
+  Rollenverständnis geben und eigene Anweisungen mitgeben, etwa dass sie besonders auf Fristen
+  achten sollen.
+- Schau dir unten die gewählten Normabschnitte an. Zu jedem zeige ich dir, was die Norm
+  verlangt, worauf du achten solltest und welche Unterlagen du anfordern musst.
+
+**Mein Tipp**
+Lade dir den Auditplan mit Checkliste herunter und schicke ihn vorab an den Fachbereich. Dann
+liegen die richtigen Unterlagen schon bereit, wenn du kommst.""",
+
+    "durchfuehrung": """**Do. Jetzt wird gesammelt.**
+
+**Was du jetzt tust**
+- Lade die Dokumente hoch, also Verfahrensanweisungen, Listen, Protokolle, Formulare.
+- Erfasse deine Notizen aus Gesprächen und Beobachtungen, möglichst wörtlich.
+- Trage Leistungsdaten ein, etwa Reklamationen, Ausschuss oder Termintreue.
+
+**Warum das wichtig ist**
+Dokumente zeigen mir nur die Vorschrift. Erst wenn du mir erzählst, was die Leute sagen und was
+du gesehen hast, finde ich die interessanten Widersprüche zwischen Vorgabe und gelebter Praxis.
+Genau dort stecken die Feststellungen, die wirklich etwas verändern.
+
+**Achtung**
+Wenn du nach einer Prüfung noch Notizen ergänzt, musst du den betreffenden Abschnitt erneut
+prüfen lassen. Sonst kenne ich sie nicht.""",
+
+    "pruefung": """**Check. Jetzt arbeiten meine Teams gegeneinander.**
+
+**Was passiert, wenn du auf Prüfung starten klickst**
+1. Mein Vorbereitungsteam wählt die Normabschnitte, falls du das noch nicht getan hast.
+2. Das Konstruktionsteam baut je Abschnitt den bestmöglichen Konformitätsnachweis.
+3. Das Falsifikationsteam greift diesen Nachweis an.
+4. Das Konstruktionsteam darf einmal erwidern.
+
+Das dauert einige Minuten. Du kannst den Fortschritt am Balken mitverfolgen.
+
+**Wie du die Ergebnisse liest**
+Jeder Prüfpunkt bekommt eine Ampel. Grün heisst, es gibt einen belegten Nachweis und keinen
+schweren Zweifel. Gelb heisst, ein Nachweis ist da, aber es steht ein Einwand dagegen. Rot
+heisst, es fehlt ein belastbarer Nachweis.
+
+**Wichtig**
+Die Ampel ist mein Befund, nicht deine Feststellung. Klapp jeden Prüfpunkt auf, dann siehst du
+die ganze Kette von der Normforderung über die Zitate bis zur Prognose fürs externe Audit.""",
+
+    "urteil": """**Hier endet meine Arbeit und deine beginnt.**
+
+**Was du jetzt tust**
+Du entscheidest über jeden Zweifel und begründest das. Vier Urteile stehen dir zur Verfügung.
+
+- **Ausgeräumt** · Der Einwand trifft nicht zu, die Unterlagen reichen aus.
+- **Bestätigt: Abweichung** · Eine Anforderung ist nicht erfüllt.
+- **Bestätigt: Verbesserungspotenzial** · Kein Normverstoss, aber eine Schwäche.
+- **Offen: vor Ort prüfen** · Aus den Unterlagen allein nicht entscheidbar.
+
+**Warum die Begründung Pflicht ist**
+Sie ist Teil deines Auditnachweises. Ein ausgeräumter Zweifel ist genauso wertvoll wie eine
+Abweichung, denn er belegt, wie tief du geprüft hast. Im Bericht erscheinen beide.
+
+Wenn du fertig bist, schreibe ich dir daraus die Feststellungen und schlage Massnahmen vor.""",
+
+    "bericht": """**Check. Der Bericht geht an die Leitung.**
+
+**Was du hier vorfindest**
+Ein Formular nach dem Aufbau eines Auditberichts mit allen Kapiteln. Die meisten Felder habe
+ich aus deinen Daten vorbelegt, etwa die eingereichten Unterlagen, die Erfüllungsübersicht und
+die Hinweise. Bei sieben Feldern weiss ich nichts, dort steht, was hineingehört.
+
+**Was du jetzt tust**
+- Geh die Felder durch und überschreibe, was nicht passt.
+- Schreib dein Fazit und die Begründung in 6.2 selbst. Das ist deine Kernaussage als Auditor,
+  die kann ich dir nicht abnehmen.
+- Lade den Bericht als Word-Datei herunter und arbeite dort weiter.
+
+**Normbezug**
+ISO 9001 verlangt, dass die Ergebnisse an die zuständige Leitung berichtet werden und dass der
+Bericht als dokumentierte Information aufbewahrt wird, also Abschnitte 9.2 und 7.5.""",
+
+    "massnahmen": """**Act. Ein Audit ist erst dann etwas wert, wenn Fehler behoben werden.**
+
+**Was ich vorbereitet habe**
+Zu jeder bestätigten Abweichung habe ich eine Ursachenhypothese, eine Sofortmassnahme, eine
+Korrekturmassnahme, eine verantwortliche Rolle, eine Frist und einen Wirksamkeitsnachweis
+vorgeschlagen. Das ist die Struktur nach ISO 9001 Abschnitt 10.2.
+
+**Was du jetzt tust**
+- Prüfe meine Ursachen mit den Prozessverantwortlichen. Es sind Hypothesen, keine Analysen.
+  Eine Ursachenanalyse ohne Gespräch mit den Betroffenen ist nicht belastbar.
+- Setze die richtige Person oder Funktion als Verantwortung ein.
+- Passe die Fristen an eure Realität an.
+
+Vergiss den Unterschied nicht. Die Sofortmassnahme beseitigt die Folge, die Korrekturmassnahme
+die Ursache. Nur die zweite verhindert, dass der Fehler wiederkommt.""",
+
+    "nachverfolgung": """**Act. Hier schliesst sich der Kreis.**
+
+ISO 9001 verlangt, dass du die Wirksamkeit der ergriffenen Massnahmen prüfst und das
+dokumentierst. Genau das machst du hier.
+
+**Was du jetzt tust**
+- Behalte die offenen Massnahmen im Blick, überfällige markiere ich dir.
+- Wähle unten eine Massnahme aus und halte fest, was du geprüft hast und mit welchem Ergebnis.
+- Steht eine Massnahme auf nicht wirksam, dann war die Ursache falsch bestimmt. Dann beginnt
+  die Analyse von vorn.
+
+**Mein Tipp**
+Nimm diese Übersicht in die Managementbewertung mit. Die Frage, wie viele Massnahmen fristgerecht
+und wirksam abgeschlossen wurden, sagt mehr über euer QM-System aus als die Zahl der
+Abweichungen."""}
+
+
+def audix_hilfe(schluessel: str, knopftext: str = "Audix fragen"):
+    """Aufklappbarer Begleiter. Erklaert, was an dieser Stelle zu tun ist."""
+    text = AUDIX_HILFE.get(schluessel, "")
+    with st.popover(knopftext, use_container_width=False):
+        bild, inhalt = st.columns([1, 4])
         with bild:
-            st.image(str(AVATAR), width=58)
+            if AVATAR.exists():
+                st.image(str(AVATAR), use_container_width=True)
         with inhalt:
-            st.markdown(text)
-    else:
+            st.markdown(f"#### {APP_NAME}")
+            st.caption(APP_CLAIM)
         st.markdown(text)
+
+
+@st.dialog("Willkommen bei Audix", width="large")
+def audix_begruessung():
+    bild, inhalt = st.columns([1, 3])
+    with bild:
+        if AVATAR.exists():
+            st.image(str(AVATAR), use_container_width=True)
+    with inhalt:
+        st.markdown(AUDIX_START)
+    if st.button("Los geht es", type="primary", use_container_width=True):
+        st.session_state.begruesst = True
+        st.rerun()
+
 
 HINWEISE = f"""
 - Audix bereitet vor und prüft, er entscheidet nicht. Jede Feststellung und ihre
@@ -1269,10 +1436,10 @@ def bericht_docx(audit: dict) -> bytes:
 kataloge = normkataloge_laden()
 audits = st.session_state.audits
 
-kopf_bild, kopf_text = st.columns([1, 11])
-with kopf_bild:
-    if AVATAR.exists():
-        st.image(str(AVATAR), width=76)
+if not st.session_state.get("begruesst"):
+    audix_begruessung()
+
+kopf_text, kopf_hilfe = st.columns([5, 1])
 with kopf_text:
     st.markdown(f"## {APP_NAME}")
     st.caption(((ORGANISATION + " · ") if ORGANISATION else "")
@@ -1295,6 +1462,9 @@ with st.sidebar:
         except (json.JSONDecodeError, UnicodeDecodeError):
             st.error("Die Datei konnte nicht gelesen werden.")
     st.divider()
+    if st.button("Einführung von Audix", use_container_width=True):
+        st.session_state.begruesst = False
+        st.rerun()
     with st.expander("Was Audix tut"):
         st.markdown(HINWEISE)
     with st.expander("Technik"):
@@ -1305,11 +1475,9 @@ with st.sidebar:
 
 # ================================================================ Plan
 if bereich.startswith("Plan"):
+    with kopf_hilfe:
+        audix_hilfe("programm")
     st.subheader("Auditprogramm des Jahres")
-    audix("Hier fängt alles an. ISO 9001 Abschnitt 9.2 verlangt ein Auditprogramm, das "
-          "Häufigkeit, Methoden und Verantwortlichkeiten festlegt und sich nach Bedeutung und "
-          "Risiko der Prozesse sowie nach früheren Ergebnissen richtet. Legen Sie die Audits "
-          "des Jahres an, ich merke mir, welche Normabschnitte noch offen sind.", breit=True)
     if not kataloge:
         st.error("Kein Normkatalog gefunden. Legen Sie eine JSON-Datei im Ordner normen ab.")
         st.stop()
@@ -1405,9 +1573,9 @@ elif bereich.startswith("Do"):
 
     # ---------------- 1 Vorbereitung (Plan)
     with t1:
-        audix("**Plan.** Zuerst der Auditplan, dann das Team. Weiter unten zeige ich Ihnen zu "
-              "jedem gewählten Normabschnitt, was die Norm verlangt und welche Unterlagen Sie "
-              "beim Fachbereich anfordern sollten. Das ist zugleich Ihre Checkliste.", breit=True)
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("vorbereitung")
         with st.form("plan"):
             s1, s2 = st.columns(2)
             audit["titel"] = s1.text_input("Bezeichnung", audit.get("titel", ""))
@@ -1460,10 +1628,10 @@ elif bereich.startswith("Do"):
                         st.markdown(f"- {n}")
         st.divider()
         st.markdown("**Auditteam zusammenstellen**")
-        st.caption("Jede Rolle ist ein eigener Agent. Sie können die Teams umbenennen, ihr "
-                   "Rollenverständnis schärfen und eine zusätzliche Anweisung mitgeben. "
-                   "Das dialektische Prinzip bleibt erhalten, denn ein Team baut den Nachweis "
-                   "und ein zweites greift ihn an.")
+        st.caption("Jede Rolle ist ein eigener Agent und lässt sich umbenennen, im "
+                   "Rollenverständnis schärfen und mit einer Zusatzanweisung versehen. Das "
+                   "dialektische Prinzip bleibt erhalten, denn ein Team baut den Nachweis und "
+                   "ein zweites greift ihn an.")
         audit.setdefault("agenten", {})
         for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
             eintrag = audit["agenten"].setdefault(schluessel, {"name": "", "rolle": ""})
@@ -1508,9 +1676,9 @@ elif bereich.startswith("Do"):
 
     # ---------------- 2 Durchfuehrung (Do)
     with t2:
-        audix("**Do.** Jetzt sammeln wir objektive Nachweise. Dokumente sind der Anfang. Erst "
-              "Interviews, Beobachtungen und Leistungsdaten zeigen mir, ob die Vorgabe auch "
-              "gelebt wird. Genau dort finde ich die interessanten Widersprüche.", breit=True)
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("durchfuehrung")
         neue = st.file_uploader("Dokumente hinzufügen (PDF, Word, Text)",
                                 type=["pdf", "docx", "txt", "md"], accept_multiple_files=True,
                                 key=f"up_{audit['id']}")
@@ -1550,10 +1718,9 @@ elif bereich.startswith("Do"):
 
     # ---------------- 3 Dialektische Pruefung (Check)
     with t3:
-        audix("**Check.** Jetzt arbeiten meine beiden Teams gegeneinander. Eines baut den "
-              "Konformitätsnachweis so gut es geht, das andere versucht ihn zu zerlegen. Was "
-              "übrig bleibt, sind begründete Zweifel. Entscheiden müssen Sie, nicht ich.",
-              breit=True)
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("pruefung")
 
         with st.expander("Welche Teams hier arbeiten"):
             for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
@@ -1632,7 +1799,7 @@ elif bereich.startswith("Do"):
                     st.write(erg.get("anforderung", ""))
                     st.markdown(f"**Gesamtbefund des Systems** · {zeichen} {lage}")
                     st.caption("Befund des Systems auf Basis der Unterlagen. Die Feststellung "
-                               "treffen Sie im Reiter Urteil.")
+                               "trifft der Auditor im Reiter Urteil.")
                     for t in erg.get("fall", {}).get("teilaussagen", []):
                         z, kurz = ampel_teilaussage(t, einwaende_abschnitt, urteile)
                         zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
@@ -1753,16 +1920,15 @@ elif bereich.startswith("Do"):
 
     # ---------------- 4 Urteil (Check)
     with t4:
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("urteil")
         einwaende = alle_einwaende(audit)
         if not einwaende:
             st.info("Noch keine Zweifel. Führen Sie zuerst die Prüfung durch.")
         else:
             erw = {x.get("einwand"): x for erg in audit.get("analysen", {}).values()
                    for x in erg.get("erwiderungen", {}).get("erwiderungen", [])}
-            audix("Hier endet meine Arbeit und Ihre beginnt. Sie entscheiden über jeden "
-                  "Zweifel und begründen das. Ihre Begründung ist Teil des Auditnachweises und "
-                  "zeigt im Bericht, wie tief geprüft wurde. Ein ausgeräumter Zweifel ist "
-                  "genauso wertvoll wie eine Abweichung.", breit=True)
             st.progress(k["beurteilt"] / max(1, k["einwaende"]),
                         text=f"{k['beurteilt']} von {k['einwaende']} Zweifeln beurteilt")
             nur_offen = st.checkbox("Nur noch unbeurteilte anzeigen", value=False)
@@ -1855,13 +2021,12 @@ elif bereich.startswith("Do"):
 
     # ---------------- 5 Bericht (Check)
     with t5:
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("bericht")
         if not audit.get("feststellungen"):
             st.info("Der Bericht entsteht, sobald Sie alle Zweifel beurteilt haben.")
         else:
-            audix("**Check.** Ich habe den Bericht so weit vorbereitet, wie ich kann. Das "
-                  "Formular unten ist aus Ihren Daten vorbelegt und vollständig überschreibbar. "
-                  "Der Bericht geht an die zuständige Leitung und wird als dokumentierte "
-                  "Information aufbewahrt, so verlangt es ISO 9001 in 9.2 und 7.5.", breit=True)
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Abweichungen", k["abweichungen"])
             s2.metric("Potenziale", k["potenziale"])
@@ -1878,9 +2043,9 @@ elif bereich.startswith("Do"):
 
             st.divider()
             st.markdown("### Berichtsformular")
-            st.caption("Das Formular folgt dem Aufbau eines Auditkurzberichts. Alle Felder sind "
-                       "aus Ihren Daten vorbelegt und von Ihnen überschreibbar. Was Sie hier "
-                       "ändern, steht genau so im Word-Bericht.")
+            st.caption("Das Formular folgt dem Aufbau eines Auditberichts. Die Felder sind aus "
+                       "den erfassten Daten vorbelegt und überschreibbar. Änderungen stehen "
+                       "genau so im Word-Bericht.")
             audit.setdefault("bericht_felder", {})
             s1, s2 = st.columns(2)
             if s1.button("Leere Felder vorbelegen", use_container_width=True):
@@ -1921,9 +2086,9 @@ elif bereich.startswith("Do"):
 
             major, minor = abweichungen_sortiert(audit)
             st.markdown("**Abweichungen im Bericht**")
-            st.caption("Die Einteilung ergibt sich aus Ihrem Urteil und aus der Prognose des "
-                       "Falsifikationsteams zum externen Audit. Wesentlich heisst, dass eine "
-                       "Anforderung systematisch oder vollständig nicht erfüllt ist.")
+            st.caption("Die Einteilung ergibt sich aus dem Urteil des Auditors und aus der "
+                       "Prognose zum externen Audit. Wesentlich heisst, dass eine Anforderung "
+                       "systematisch oder vollständig nicht erfüllt ist.")
             s1, s2 = st.columns(2)
             s1.metric("Wesentliche Abweichungen", len(major))
             s2.metric("Geringfügige Abweichungen", len(minor))
@@ -1969,15 +2134,14 @@ elif bereich.startswith("Do"):
 
     # ---------------- 6 Massnahmen (Act)
     with t6:
-        audix("**Act.** Ein Audit ist erst dann etwas wert, wenn die Fehler behoben werden. "
-              "Zu jeder bestätigten Feststellung schlage ich Sofort- und Korrekturmassnahme "
-              "vor. Meine Ursachen sind Hypothesen, prüfen Sie sie mit den "
-              "Prozessverantwortlichen.", breit=True)
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("massnahmen")
         if not audit.get("massnahmen"):
             st.info("Noch keine Massnahmen. Sie entstehen nach dem Festschreiben der Urteile.")
         else:
-            st.warning("Die Ursachen sind Hypothesen der KI. Prüfen Sie sie mit den "
-                       "Prozessverantwortlichen, bevor Sie eine Massnahme freigeben.")
+            st.warning("Die Ursachen sind Hypothesen. Sie gehören vor der Freigabe mit den "
+                       "Prozessverantwortlichen geprüft.")
             tabelle = st.data_editor(
                 audit["massnahmen"], num_rows="dynamic", use_container_width=True,
                 key=f"me_{audit['id']}",
@@ -2005,10 +2169,9 @@ elif bereich.startswith("Do"):
 
 # ================================================================ Act
 else:
+    with kopf_hilfe:
+        audix_hilfe("nachverfolgung")
     st.subheader("Nachverfolgung der Wirksamkeit")
-    audix("**Act.** Hier schliesst sich der Kreis. ISO 9001 verlangt, die Wirksamkeit der "
-          "ergriffenen Massnahmen zu prüfen und zu dokumentieren. Überfällige Massnahmen "
-          "markiere ich für Sie. Die Ergebnisse gehören in die Managementbewertung.", breit=True)
     zeilen = [dict(m, Audit=a.get("titel", ""),
                    ueberfaellig="ja" if (m.get("status") in ("offen", "in Umsetzung")
                                          and str(m.get("termin", "")) < str(date.today())) else "")
