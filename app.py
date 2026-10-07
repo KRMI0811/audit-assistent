@@ -25,7 +25,8 @@ from pypdf import PdfReader
 # ---------------------------------------------------------------------------
 # Einstellungen aus den Secrets
 # ---------------------------------------------------------------------------
-APP_NAME = st.secrets.get("APP_NAME", "Audit-Assistent Qualitätsmanagement")
+APP_NAME = st.secrets.get("APP_NAME", "Audix")
+APP_CLAIM = st.secrets.get("APP_CLAIM", "Dein KI-Assistent für das interne Audit")
 ORGANISATION = st.secrets.get("ORGANISATION", "")
 API_BASE = str(st.secrets.get("API_BASE", "https://api.x.ai/v1")).rstrip("/")
 API_KEY = str(st.secrets.get("API_KEY", "")).strip()
@@ -39,13 +40,29 @@ MAX_ZEICHEN = int(st.secrets.get("MAX_ZEICHEN", 20000))
 
 NORMEN_ORDNER = Path(__file__).parent / "normen"
 LOGO = Path(__file__).parent / "logo.png"
+AVATAR = Path(__file__).parent / "audix.png"
 
-st.set_page_config(page_title=APP_NAME, layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon=str(AVATAR) if AVATAR.exists() else None,
+                   layout="wide")
 if LOGO.exists():
     st.logo(str(LOGO), size="large")
 
+
+def audix(text: str, breit: bool = False):
+    """Audix meldet sich zu Wort. Kurze Hilfestellung mit Fuchsbild."""
+    if AVATAR.exists():
+        bild, inhalt = st.columns([1, 11] if breit else [1, 7])
+        with bild:
+            st.image(str(AVATAR), width=58)
+        with inhalt:
+            st.markdown(text)
+    else:
+        st.markdown(text)
+
 HINWEISE = f"""
-- Das System bereitet vor und prüft, es entscheidet nicht. Jede Feststellung und ihre
+**Was Audix für Sie tut und was nicht**
+
+- Audix bereitet vor und prüft, er entscheidet nicht. Jede Feststellung und ihre
   Einstufung verantwortet der Auditor.
 - Ihre Unterlagen werden zur Auswertung an den Dienst {PROVIDER or 'des eingestellten Anbieters'}
   übermittelt. Laden Sie keine vertraulichen Originalunterlagen und keine Personendaten hoch,
@@ -56,7 +73,7 @@ HINWEISE = f"""
 """
 
 LEGENDE = """
-**Wie Sie die Ampel lesen**
+**Audix erklärt die Ampel**
 
 🟢 **belegt** · Zu diesem Prüfpunkt gibt es einen Nachweis, dessen Zitat wörtlich in Ihren
 Unterlagen wiedergefunden wurde, und es steht kein schwerer Zweifel dagegen.
@@ -220,12 +237,18 @@ MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt", "nicht wi
 def anmeldung() -> bool:
     if st.session_state.get("auth_ok"):
         return True
-    st.title(APP_NAME)
-    st.write("Bitte Zugangspasswort eingeben.")
+    links, rechts = st.columns([1, 2])
+    with links:
+        if LOGO.exists():
+            st.image(str(LOGO), width=300)
+    with rechts:
+        st.title(APP_NAME)
+        st.subheader(APP_CLAIM)
+        st.write("Bitte Zugangspasswort eingeben.")
     with st.expander("Hinweise zur Nutzung", expanded=True):
         st.markdown(HINWEISE)
     pw = st.text_input("Passwort", type="password")
-    if st.button("Anmelden"):
+    if st.button("Anmelden", type="primary"):
         if pw and pw == st.secrets.get("APP_PASSWORD", ""):
             st.session_state.auth_ok = True
             st.rerun()
@@ -591,7 +614,7 @@ def bericht_markdown(audit: dict) -> str:
                       f"Wirksamkeitsnachweis · {m.get('wirksamkeitsnachweis', '')}", ""]
     z += ["## Ausgeräumte Zweifel (Nachweis der Prüftiefe)"]
     z += [f"- {i}: {g}" for i, g in b["ausgeraeumt"]] or ["Keine."]
-    z += ["", "---", "", "Erstellt mit einem dialektischen Prüfverfahren. Zwei getrennte "
+    z += ["", "---", "", f"Erstellt mit {APP_NAME}, einem dialektischen Prüfverfahren. Zwei getrennte "
           "Agententeams haben den Konformitätsnachweis konstruiert und angegriffen. Über jeden "
           "verbliebenen Zweifel hat der Auditor entschieden und dies begründet. Einstufung und "
           "Schlussfolgerung verantwortet der Auditor."]
@@ -673,7 +696,7 @@ border-top:1px solid #d5dde5;padding-top:.8rem}}
 <th>Status</th></tr>{mass or '<tr><td colspan="5">Keine Massnahmen erfasst.</td></tr>'}</table>
 <h2>Geprüfte Nachweise</h2><ul>{quellen}</ul>
 <h2>Ausgeräumte Zweifel</h2><ul>{ausger or '<li>Keine.</li>'}</ul>
-<footer>Erstellt mit einem dialektischen Prüfverfahren. Zwei getrennte Agententeams haben den
+<footer>Erstellt mit {schutz(APP_NAME)}, einem dialektischen Prüfverfahren. Zwei getrennte Agententeams haben den
 Konformitätsnachweis konstruiert und angegriffen. Über jeden verbliebenen Zweifel hat der
 Auditor entschieden und dies begründet. Einstufung und Schlussfolgerung verantwortet der
 Auditor.</footer></body></html>"""
@@ -775,7 +798,8 @@ def feld_vorbelegung(audit: dict, schluessel: str) -> str:
         return "\n".join(zeilen)
     if schluessel == "haftung":
         return ("Das Audit beruht auf einem Stichprobenverfahren der verfügbaren Informationen. "
-                "Die Dokumentenanalyse wurde durch ein KI-gestütztes Prüfverfahren mit zwei "
+                f"Die Dokumentenanalyse wurde durch das KI-gestützte Prüfverfahren {APP_NAME} "
+                "mit zwei "
                 "getrennt arbeitenden Agententeams unterstützt. Jedes von der KI angeführte "
                 "Zitat wurde maschinell gegen die Quelle geprüft. Die Bewertung der Nachweise "
                 "und alle Schlussfolgerungen verantwortet der Auditor.")
@@ -861,8 +885,8 @@ def feld_vorbelegung(audit: dict, schluessel: str) -> str:
         text = [audit.get("fazit", "").strip(),
                 f"Die Bewertung beruht auf {audit.get('norm', 'der Norm')} und auf den Leitlinien "
                 "für Managementsystemaudits nach ISO 19011.",
-                "Das Audit wurde durch ein dialektisches KI-Prüfverfahren unterstützt. Ein "
-                "Agententeam hat den Konformitätsnachweis konstruiert, ein zweites hat ihn "
+                f"Das Audit wurde durch das dialektische KI-Prüfverfahren {APP_NAME} unterstützt. "
+                "Ein Agententeam hat den Konformitätsnachweis konstruiert, ein zweites hat ihn "
                 "angegriffen. Über jeden verbliebenen Zweifel hat der Auditor entschieden und "
                 "diese Entscheidung begründet."]
         if offen:
@@ -1242,9 +1266,14 @@ def bericht_docx(audit: dict) -> bytes:
 kataloge = normkataloge_laden()
 audits = st.session_state.audits
 
-st.title(APP_NAME)
-st.caption((ORGANISATION + " · " if ORGANISATION else "")
-           + "Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
+kopf_bild, kopf_text = st.columns([1, 9])
+with kopf_bild:
+    if AVATAR.exists():
+        st.image(str(AVATAR), width=86)
+with kopf_text:
+    st.title(APP_NAME)
+    st.caption(APP_CLAIM + ((" · " + ORGANISATION) if ORGANISATION else "")
+               + " · Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
 
 with st.sidebar:
     bereich = st.radio("Bereich", ["Plan · Auditprogramm", "Do und Check · Einzelaudit",
@@ -1262,7 +1291,7 @@ with st.sidebar:
         except (json.JSONDecodeError, UnicodeDecodeError):
             st.error("Die Datei konnte nicht gelesen werden.")
     st.divider()
-    with st.expander("Hinweise zur Nutzung"):
+    with st.expander("Was Audix tut"):
         st.markdown(HINWEISE)
     with st.expander("Technik"):
         st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
@@ -1273,9 +1302,10 @@ with st.sidebar:
 # ================================================================ Plan
 if bereich.startswith("Plan"):
     st.subheader("Auditprogramm des Jahres")
-    st.caption("ISO 9001 Abschnitt 9.2 verlangt ein Auditprogramm, das Häufigkeit, Methoden "
-               "und Verantwortlichkeiten festlegt und sich nach Bedeutung und Risiko der "
-               "Prozesse sowie nach den Ergebnissen früherer Audits richtet.")
+    audix("Hier fängt alles an. ISO 9001 Abschnitt 9.2 verlangt ein Auditprogramm, das "
+          "Häufigkeit, Methoden und Verantwortlichkeiten festlegt und sich nach Bedeutung und "
+          "Risiko der Prozesse sowie nach früheren Ergebnissen richtet. Legen Sie die Audits "
+          "des Jahres an, ich merke mir, welche Normabschnitte noch offen sind.", breit=True)
     if not kataloge:
         st.error("Kein Normkatalog gefunden. Legen Sie eine JSON-Datei im Ordner normen ab.")
         st.stop()
@@ -1371,7 +1401,9 @@ elif bereich.startswith("Do"):
 
     # ---------------- 1 Vorbereitung (Plan)
     with t1:
-        st.caption("Plan. Auditplan festlegen und die Prüfpunkte kennen, bevor es losgeht.")
+        audix("**Plan.** Zuerst der Auditplan, dann das Team. Weiter unten zeige ich Ihnen zu "
+              "jedem gewählten Normabschnitt, was die Norm verlangt und welche Unterlagen Sie "
+              "beim Fachbereich anfordern sollten. Das ist zugleich Ihre Checkliste.", breit=True)
         with st.form("plan"):
             s1, s2 = st.columns(2)
             audit["titel"] = s1.text_input("Bezeichnung", audit.get("titel", ""))
@@ -1472,8 +1504,9 @@ elif bereich.startswith("Do"):
 
     # ---------------- 2 Durchfuehrung (Do)
     with t2:
-        st.caption("Do. Objektive Nachweise sammeln. Dokumente sind der Anfang, erst "
-                   "Interviews, Beobachtungen und Leistungsdaten zeigen die gelebte Praxis.")
+        audix("**Do.** Jetzt sammeln wir objektive Nachweise. Dokumente sind der Anfang. Erst "
+              "Interviews, Beobachtungen und Leistungsdaten zeigen mir, ob die Vorgabe auch "
+              "gelebt wird. Genau dort finde ich die interessanten Widersprüche.", breit=True)
         neue = st.file_uploader("Dokumente hinzufügen (PDF, Word, Text)",
                                 type=["pdf", "docx", "txt", "md"], accept_multiple_files=True,
                                 key=f"up_{audit['id']}")
@@ -1513,9 +1546,10 @@ elif bereich.startswith("Do"):
 
     # ---------------- 3 Dialektische Pruefung (Check)
     with t3:
-        st.caption("Check. Ein Team baut den Konformitätsnachweis, ein zweites prüft ihn gegen. "
-                   "Das Ergebnis ist eine Liste begründeter Zweifel, über die Sie im nächsten "
-                   "Reiter entscheiden.")
+        audix("**Check.** Jetzt arbeiten meine beiden Teams gegeneinander. Eines baut den "
+              "Konformitätsnachweis so gut es geht, das andere versucht ihn zu zerlegen. Was "
+              "übrig bleibt, sind begründete Zweifel. Entscheiden müssen Sie, nicht ich.",
+              breit=True)
 
         with st.expander("Welche Teams hier arbeiten"):
             for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
@@ -1721,9 +1755,10 @@ elif bereich.startswith("Do"):
         else:
             erw = {x.get("einwand"): x for erg in audit.get("analysen", {}).values()
                    for x in erg.get("erwiderungen", {}).get("erwiderungen", [])}
-            st.caption("Hier endet die Automatik. Sie entscheiden über jeden Zweifel und "
-                       "begründen das. Diese Begründung ist Teil des Auditnachweises und zeigt "
-                       "im Bericht, wie tief geprüft wurde.")
+            audix("Hier endet meine Arbeit und Ihre beginnt. Sie entscheiden über jeden "
+                  "Zweifel und begründen das. Ihre Begründung ist Teil des Auditnachweises und "
+                  "zeigt im Bericht, wie tief geprüft wurde. Ein ausgeräumter Zweifel ist "
+                  "genauso wertvoll wie eine Abweichung.", breit=True)
             st.progress(k["beurteilt"] / max(1, k["einwaende"]),
                         text=f"{k['beurteilt']} von {k['einwaende']} Zweifeln beurteilt")
             nur_offen = st.checkbox("Nur noch unbeurteilte anzeigen", value=False)
@@ -1819,8 +1854,10 @@ elif bereich.startswith("Do"):
         if not audit.get("feststellungen"):
             st.info("Der Bericht entsteht, sobald Sie alle Zweifel beurteilt haben.")
         else:
-            st.caption("Check. Der Bericht geht an die zuständige Leitung und wird als "
-                       "dokumentierte Information aufbewahrt (ISO 9001, Abschnitte 9.2 und 7.5).")
+            audix("**Check.** Ich habe den Bericht so weit vorbereitet, wie ich kann. Das "
+                  "Formular unten ist aus Ihren Daten vorbelegt und vollständig überschreibbar. "
+                  "Der Bericht geht an die zuständige Leitung und wird als dokumentierte "
+                  "Information aufbewahrt, so verlangt es ISO 9001 in 9.2 und 7.5.", breit=True)
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Abweichungen", k["abweichungen"])
             s2.metric("Potenziale", k["potenziale"])
@@ -1928,9 +1965,10 @@ elif bereich.startswith("Do"):
 
     # ---------------- 6 Massnahmen (Act)
     with t6:
-        st.caption("Act. Zu jeder bestätigten Feststellung müssen Korrekturen und "
-                   "Korrekturmassnahmen festgelegt werden. Die Vorschläge stammen vom "
-                   "Massnahmenteam, bestätigen muss sie der Fachbereich.")
+        audix("**Act.** Ein Audit ist erst dann etwas wert, wenn die Fehler behoben werden. "
+              "Zu jeder bestätigten Feststellung schlage ich Sofort- und Korrekturmassnahme "
+              "vor. Meine Ursachen sind Hypothesen, prüfen Sie sie mit den "
+              "Prozessverantwortlichen.", breit=True)
         if not audit.get("massnahmen"):
             st.info("Noch keine Massnahmen. Sie entstehen nach dem Festschreiben der Urteile.")
         else:
@@ -1964,8 +2002,9 @@ elif bereich.startswith("Do"):
 # ================================================================ Act
 else:
     st.subheader("Nachverfolgung der Wirksamkeit")
-    st.caption("Act. ISO 9001 verlangt, die Wirksamkeit der ergriffenen Massnahmen zu prüfen "
-               "und zu dokumentieren. Die Ergebnisse fliessen in die Managementbewertung ein.")
+    audix("**Act.** Hier schliesst sich der Kreis. ISO 9001 verlangt, die Wirksamkeit der "
+          "ergriffenen Massnahmen zu prüfen und zu dokumentieren. Überfällige Massnahmen "
+          "markiere ich für Sie. Die Ergebnisse gehören in die Managementbewertung.", breit=True)
     zeilen = [dict(m, Audit=a.get("titel", ""),
                    ueberfaellig="ja" if (m.get("status") in ("offen", "in Umsetzung")
                                          and str(m.get("termin", "")) < str(date.today())) else "")
