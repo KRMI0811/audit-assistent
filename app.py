@@ -58,10 +58,11 @@ Verantwortung für jede Feststellung, nicht die Maschine.
 
 **So läuft es ab**
 
-1. **Plan** · Du legst dein Auditprogramm für das Jahr an.
-2. **Do** · Du sammelst Nachweise, also Dokumente, Interviews und Kennzahlen.
-3. **Check** · Meine Teams prüfen, du urteilst, ich schreibe den Berichtsentwurf.
-4. **Act** · Massnahmen festlegen und ihre Wirksamkeit nachverfolgen.
+1. Im **Auditprogramm** legst du die Audits des Jahres an.
+2. Im **Einzelaudit** führst du eines davon durch. Dieser Teil folgt dem PDCA-Zyklus,
+   also Vorbereitung, Durchführung, Prüfung und Urteil, Bericht und Massnahmen.
+3. Unter **Massnahmen** verfolgst du über alle Audits hinweg, ob die vereinbarten
+   Massnahmen wirksam waren.
 
 Oben rechts findest du auf jedem Reiter den Knopf **Audix fragen**. Dort erkläre ich dir, was
 an dieser Stelle zu tun ist, und dort kannst du mir auch direkt Fragen stellen. Ich kenne deinen
@@ -1580,45 +1581,59 @@ kataloge = normkataloge_laden()
 audits = st.session_state.audits
 
 if not st.session_state.get("begruesst"):
+    # Der Hinweis gilt als gesehen, sobald er einmal angezeigt wurde. Sonst
+    # erscheint er nach dem Schliessen über das Kreuz bei jeder Eingabe erneut.
+    st.session_state.begruesst = True
     audix_begruessung()
 
 kopf_text, kopf_hilfe = st.columns([5, 1])
 with kopf_text:
     st.markdown(f"## {APP_NAME}")
-    st.caption(((ORGANISATION + " · ") if ORGANISATION else "")
-               + "Internes Audit nach ISO 9001 entlang des PDCA-Zyklus")
+    st.caption(((ORGANISATION + " · ") if ORGANISATION else "") + "Internes Auditwesen")
 st.divider()
 
 with st.sidebar:
-    bereich = st.radio("Bereich", ["Plan · Auditprogramm", "Do und Check · Einzelaudit",
-                                   "Act · Nachverfolgung"], label_visibility="collapsed")
+    if LOGO.exists():
+        st.image(str(LOGO), width=165)
+    bereich = st.radio("Bereich", ["Auditprogramm", "Einzelaudit", "Massnahmen"],
+                       label_visibility="collapsed")
+    # Platzhalter. Wird im Einzelaudit mit Auditauswahl und Fortschritt gefüllt,
+    # damit beides direkt unter der Navigation steht.
+    audit_platz = st.container()
     st.divider()
-    st.subheader("Arbeitsstand")
-    st.caption("Nichts wird dauerhaft gespeichert. Stand als Datei sichern und später laden.")
-    st.download_button("Arbeitsstand sichern", json.dumps(audits, ensure_ascii=False, indent=1),
-                       file_name=f"auditstand_{date.today()}.json", use_container_width=True)
-    wieder = st.file_uploader("Arbeitsstand laden", type=["json"], key="restore")
-    if wieder is not None and st.button("Übernehmen", use_container_width=True):
-        try:
-            st.session_state.audits = json.loads(wieder.getvalue().decode("utf-8"))
-            st.rerun()
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            st.error("Die Datei konnte nicht gelesen werden.")
-    st.divider()
-    if st.button("Einführung von Audix", use_container_width=True):
-        st.session_state.begruesst = False
-        st.rerun()
+    with st.expander("Arbeitsstand sichern und laden"):
+        st.caption("Nichts wird dauerhaft gespeichert. Stand als Datei sichern und "
+                   "später wieder laden.")
+        st.download_button("Arbeitsstand sichern",
+                           json.dumps(audits, ensure_ascii=False, indent=1),
+                           file_name=f"auditstand_{date.today()}.json",
+                           use_container_width=True)
+        wieder = st.file_uploader("Arbeitsstand laden", type=["json"], key="restore")
+        if wieder is not None and st.button("Übernehmen", use_container_width=True):
+            try:
+                st.session_state.audits = json.loads(wieder.getvalue().decode("utf-8"))
+                st.rerun()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                st.error("Die Datei konnte nicht gelesen werden.")
     with st.expander("Was Audix tut"):
         st.markdown(HINWEISE)
+        if st.button("Einführung erneut ansehen", use_container_width=True):
+            st.session_state.begruesst = False
+            st.rerun()
     with st.expander("Technik"):
         st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
         schnell = st.checkbox("Schnellmodus ohne Erwiderungsrunde", value=False)
         if not API_KEY:
             st.error("Kein API-Schlüssel in den Secrets hinterlegt.")
 
-# ================================================================ Plan
-if bereich.startswith("Plan"):
+# ================================================================ Auditprogramm
+if bereich == "Auditprogramm":
     st.session_state["aktuelles_audit"] = None
+    with audit_platz:
+        if audits:
+            st.caption(f"{len(audits)} Audit(s) im Programm")
+        else:
+            st.caption("Noch kein Audit angelegt")
     with kopf_hilfe:
         audix_hilfe("programm")
     st.subheader("Auditprogramm des Jahres")
@@ -1682,13 +1697,15 @@ if bereich.startswith("Plan"):
         st.info("Noch keine Audits im Programm.")
 
 # ================================================================ Do und Check
-elif bereich.startswith("Do"):
+elif bereich == "Einzelaudit":
     if not audits:
+        with audit_platz:
+            st.caption("Noch kein Audit vorhanden.")
         st.warning("Legen Sie zuerst im Auditprogramm ein Audit an.")
         st.stop()
-    namen = {f"{a['termin']} · {a['titel']}": a for a in audits}
-    with st.sidebar:
-        st.subheader("Audit")
+    namen = {f"{a['titel']} · {a['termin']}": a for a in audits}
+    with audit_platz:
+        st.caption("Gewähltes Audit")
         audit = namen[st.selectbox("Audit", list(namen), label_visibility="collapsed")]
     st.session_state["aktuelles_audit"] = audit
     katalog = kataloge.get(audit.get("norm"))
@@ -1699,18 +1716,22 @@ elif bereich.startswith("Do"):
     k = kennzahlen(audit)
     audit.setdefault("prompt_zusatz", {})
 
-    with st.sidebar:
-        st.divider()
-        st.subheader("Fortschritt")
-        schritte = [("Vorbereitung", bool(audit.get("kriterien"))),
-                    ("Nachweise gesammelt", bool(quellen_sammeln(audit))),
-                    ("Prüfung gelaufen", bool(audit.get("analysen"))),
-                    ("Urteile vollständig", k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"]),
-                    ("Bericht erstellt", bool(audit.get("feststellungen"))),
-                    ("Massnahmen festgelegt", bool(audit.get("massnahmen")))]
-        st.progress(sum(1 for _, f in schritte if f) / len(schritte))
-        for name, fertig in schritte:
-            st.markdown(f"{name} · {'erledigt' if fertig else 'offen'}")
+    with audit_platz:
+        schritte = [("Vorbereitung", "Plan", bool(audit.get("kriterien"))),
+                    ("Nachweise gesammelt", "Do", bool(quellen_sammeln(audit))),
+                    ("Prüfung gelaufen", "Check", bool(audit.get("analysen"))),
+                    ("Urteile vollständig", "Check",
+                     k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"]),
+                    ("Bericht erstellt", "Check", bool(audit.get("feststellungen"))),
+                    ("Massnahmen festgelegt", "Act", bool(audit.get("massnahmen")))]
+        fertig_anzahl = sum(1 for _, _, f in schritte if f)
+        st.progress(fertig_anzahl / len(schritte),
+                    text=f"{fertig_anzahl} von {len(schritte)} Schritten erledigt")
+        # Eine einzige Zeile je Schritt in einem Block, damit die Liste in der
+        # Seitenleiste kompakt bleibt und nicht über die ganze Höhe läuft.
+        st.markdown("  \n".join(
+            f"{'✓' if fertig else '○'} {name} · *{phase}*"
+            for name, phase, fertig in schritte))
 
     t1, t2, t3, t4, t5, t6 = st.tabs(
         ["1 Vorbereitung (Plan)", "2 Durchführung (Do)", "3 Prüfung (Check)",
@@ -2315,9 +2336,11 @@ elif bereich.startswith("Do"):
 # ================================================================ Act
 else:
     st.session_state["aktuelles_audit"] = None
+    with audit_platz:
+        st.caption("Alle Massnahmen aus allen Audits")
     with kopf_hilfe:
         audix_hilfe("nachverfolgung")
-    st.subheader("Nachverfolgung der Wirksamkeit")
+    st.subheader("Massnahmen und Nachverfolgung der Wirksamkeit")
     zeilen = [dict(m, Audit=a.get("titel", ""),
                    ueberfaellig="ja" if (m.get("status") in ("offen", "in Umsetzung")
                                          and str(m.get("termin", "")) < str(date.today())) else "")
