@@ -92,9 +92,17 @@ Normabschnitte im Jahresprogramm noch gar nicht vorkommen.""",
 
 **Was du jetzt tust**
 - Fülle den Auditplan aus. Daraus wird die Einladung an den Fachbereich.
-- Stelle dein Auditteam zusammen. Du kannst meine Teams umbenennen, ihnen ein
-  Rollenverständnis geben und eigene Anweisungen mitgeben, etwa dass sie besonders auf Fristen
-  achten sollen.
+- Stelle dein Auditteam zusammen. Unten legst du fest, wie viele Falsifikationsteams angreifen
+  und ob das Konstruktionsteam erwidern darf. Zwei Teams kannst du nicht abwählen, denn ohne
+  Angriff auf den Nachweis bleibt nur eine Meinung übrig.
+- Klapp ein Team auf, gib ihm einen Namen und wähle ein Muster für das Rollenverständnis. Den
+  Mustertext kannst du danach frei überschreiben.
+
+**Wann ein zweites Falsifikationsteam lohnt**
+Wenn du zwei sehr verschiedene Blickwinkel brauchst, etwa eines auf die Belastbarkeit der
+Unterlagen und eines auf die gelebte Praxis. Gib jedem dann wirklich einen eigenen Schwerpunkt.
+Ohne eigenen Schwerpunkt findet das zweite Team dasselbe wie das erste, und du bezahlst nur
+mit Wartezeit.
 - Schau dir unten die gewählten Normabschnitte an. Zu jedem zeige ich dir, was die Norm
   verlangt, worauf du achten solltest und welche Unterlagen du anfordern musst.
 
@@ -123,8 +131,12 @@ prüfen lassen. Sonst kenne ich sie nicht.""",
 **Was passiert, wenn du auf Prüfung starten klickst**
 1. Mein Vorbereitungsteam wählt die Normabschnitte, falls du das noch nicht getan hast.
 2. Das Konstruktionsteam baut je Abschnitt den bestmöglichen Konformitätsnachweis.
-3. Das Falsifikationsteam greift diesen Nachweis an.
-4. Das Konstruktionsteam darf einmal erwidern.
+3. Jedes eingesetzte Falsifikationsteam greift diesen Nachweis an.
+4. Das Konstruktionsteam darf einmal erwidern, sofern du die Erwiderungsrunde eingeschaltet hast.
+
+Oben siehst du die Besetzung und kannst sie hier noch ändern. Konstruktionsteam und
+Falsifikationsteam laufen immer, alles andere entscheidest du. Die Anzeige sagt dir vorher,
+wie viele Modellaufrufe der Lauf kostet.
 
 Das dauert einige Minuten. Du kannst den Fortschritt am Balken mitverfolgen.
 
@@ -589,6 +601,78 @@ AGENTEN = [
 
 AGENT_STANDARD = {s: (n, z) for s, n, _, z, _, _ in AGENTEN}
 
+# Zusaetzliche Falsifikationsteams. Sie arbeiten mit derselben Grundanweisung, aber mit
+# eigenem Namen und eigenem Schwerpunkt. Damit laesst sich der Nachweis aus mehreren
+# Richtungen angreifen, ohne das dialektische Grundprinzip zu veraendern.
+ZUSATZ_CONTRA = [("contra2", "Falsifikationsteam 2"), ("contra3", "Falsifikationsteam 3")]
+AGENT_STANDARD.update({s: (n, "Zweite Angriffsrichtung auf denselben Nachweis.")
+                       for s, n in ZUSATZ_CONTRA})
+
+# Pflichtbesetzung. Ohne diese beiden Rollen gibt es kein dialektisches Verfahren,
+# sondern nur eine Meinung. Sie sind daher nicht abwaehlbar.
+PFLICHTTEAMS = ["pro", "contra"]
+
+# Anklickbare Muster fuer das Rollenverstaendnis. Je Team mehrere Profile.
+MUSTERROLLEN = {
+    "vorbereitung": [
+        ("Risikoorientiert", "Du wählst die Normabschnitte nach dem Risiko für Kunde und "
+                             "Produkt aus und begründest jede Wahl mit dem möglichen Schaden."),
+        ("Nachweisnah", "Du wählst nur Abschnitte, zu denen die vorliegenden Unterlagen "
+                        "wirklich etwas hergeben, und benennst Lücken schonungslos.")],
+    "pro": [
+        ("Erfahrener Prozesskenner", "Du bist ein erfahrener Prozessverantwortlicher und baust "
+                                     "den Nachweis so stark, wie die Unterlagen es hergeben. Du "
+                                     "beschönigst nichts und markierst jede Annahme offen."),
+        ("Zertifizierungserfahren", "Du kennst externe Zertifizierungsaudits und formulierst den "
+                                    "Nachweis so, wie ihn ein externer Auditor sehen möchte, also "
+                                    "mit Vorgabe, Aufzeichnung und Wirksamkeitsbeleg."),
+        ("Am Einzelfall", "Du belegst jede Aussage am konkreten Einzelfall und verweist auf "
+                          "Datum, Vorgang und Dokument, nie auf allgemeine Regelungen allein.")],
+    "contra": [
+        ("Schwerpunkt Dokumentenlage", "Du prüfst vor allem die Belastbarkeit der Unterlagen. "
+                                       "Veraltete Stände, fehlende Freigaben, widersprüchliche "
+                                       "Fassungen und Aufzeichnungen ohne Datum sind dein Thema."),
+        ("Schwerpunkt gelebte Praxis", "Du misstraust jeder Vorgabe, die nur beschrieben ist. Du "
+                                       "suchst nach Belegen dafür, dass die Regelung im Alltag "
+                                       "tatsächlich angewendet und ihre Wirkung geprüft wird."),
+        ("Schwerpunkt Risiko", "Du kommst aus einer stark regulierten Branche und legst "
+                               "besonderen Wert auf Rückverfolgbarkeit, Freigaben und den "
+                               "Umgang mit Abweichungen und Ausnahmen.")],
+    "contra2": [
+        ("Schwerpunkt gelebte Praxis", "Du misstraust jeder Vorgabe, die nur beschrieben ist. Du "
+                                       "suchst nach Belegen dafür, dass die Regelung im Alltag "
+                                       "tatsächlich angewendet und ihre Wirkung geprüft wird."),
+        ("Schwerpunkt Schnittstellen", "Du suchst Brüche zwischen Bereichen, also Übergaben ohne "
+                                       "klare Zuständigkeit, doppelte Zuständigkeiten und "
+                                       "Informationen, die unterwegs verloren gehen.")],
+    "contra3": [
+        ("Schwerpunkt Kennzahlen", "Du vergleichst Vorgaben mit Leistungsdaten und fragst, ob "
+                                   "Reklamationen, Termintreue oder Ausschuss das bestätigen, "
+                                   "was die Unterlagen behaupten."),
+        ("Schwerpunkt Risiko", "Du kommst aus einer stark regulierten Branche und legst "
+                               "besonderen Wert auf Rückverfolgbarkeit, Freigaben und den "
+                               "Umgang mit Abweichungen und Ausnahmen.")],
+    "erwiderung": [
+        ("Selbstkritisch", "Du gestehst jeden Einwand zu, den die Unterlagen stützen, und "
+                           "verteidigst nur, was du wörtlich belegen kannst."),
+        ("Sachlich abwägend", "Du trennst sauber zwischen formalen Mängeln und inhaltlichen "
+                              "Lücken und sagst bei jedem Einwand, welcher Fall vorliegt.")],
+    "vorort": [
+        ("Gesprächsführung", "Du formulierst Fragen, die zum Erzählen einladen, und vermeidest "
+                             "alles, was nach Prüfungssituation klingt."),
+        ("Stichprobenlogik", "Du denkst in Stichproben und benennst immer Zeitraum, Umfang und "
+                             "Auswahlkriterium, damit die Prüfung nachvollziehbar bleibt.")],
+    "bericht": [
+        ("Nüchtern und prüfbar", "Du schreibst knapp, sachlich und ohne Wertung, jede "
+                                 "Feststellung mit Anforderung, Nachweis und Abweichung."),
+        ("Adressat Leitung", "Du schreibst so, dass die Geschäftsleitung ohne Fachjargon "
+                             "versteht, worum es geht und was auf dem Spiel steht.")],
+    "massnahmen": [
+        ("Ursachenorientiert", "Du bohrst bei der Ursache nach und gibst dich nicht mit "
+                               "Schulung oder Sensibilisierung als Korrekturmassnahme zufrieden."),
+        ("Umsetzbar", "Du schlägst Massnahmen vor, die eine kleine Organisation mit knappen "
+                      "Ressourcen auch wirklich umsetzen kann.")]}
+
 
 def agent_name(audit: dict, schluessel: str) -> str:
     eigen = (audit.get("agenten") or {}).get(schluessel, {}).get("name", "").strip()
@@ -597,6 +681,21 @@ def agent_name(audit: dict, schluessel: str) -> str:
 
 def agent_rolle(audit: dict, schluessel: str) -> str:
     return (audit.get("agenten") or {}).get(schluessel, {}).get("rolle", "")
+
+
+def besetzung(audit: dict) -> dict:
+    """Welche Teams in der Pruefung laufen. Die beiden Pflichtteams sind immer dabei."""
+    gesetzt = audit.setdefault("besetzung", {})
+    gesetzt.setdefault("falsifikationsteams", 1)
+    gesetzt.setdefault("erwiderung", True)
+    gesetzt["falsifikationsteams"] = min(3, max(1, int(gesetzt["falsifikationsteams"])))
+    return gesetzt
+
+
+def contra_schluessel(audit: dict) -> list:
+    """Die Schluessel der aktiven Falsifikationsteams, immer mindestens einer."""
+    anzahl = besetzung(audit)["falsifikationsteams"]
+    return ["contra"] + [s for s, _ in ZUSATZ_CONTRA[:anzahl - 1]]
 
 
 URTEILE = ["Ausgeräumt", "Bestätigt: Abweichung", "Bestätigt: Verbesserungspotenzial",
@@ -848,17 +947,25 @@ def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True, melden=
                     f"Auditkriterium\n{kriterium}\n\nNachweise\n{material}", audit, "pro")
     for t in fall.get("teilaussagen", []):
         zitate_pruefen(t.get("nachweise"), quellen)
-    if melden:
-        melden(f"Falsifikationsteam greift Abschnitt {nr} an")
-    einw = llm_json(MODEL_CONTRA, CONTRA_SYSTEM,
-                    f"Auditkriterium\n{kriterium}\n\nAssurance Case\n"
-                    f"{json.dumps(fall, ensure_ascii=False)}\n\nNachweise\n{material}",
-                    audit, "contra")
     praefix = nr.replace(".", "_")
-    for x in einw.get("einwaende", []):
-        x["id"] = f"{praefix}-{x.get('id', 'E')}"
-        x["abschnitt"] = nr
-        zitate_pruefen(x.get("nachweise"), quellen)
+    einw = {"einwaende": []}
+    for i, schluessel in enumerate(contra_schluessel(audit)):
+        teamname = agent_name(audit, schluessel)
+        if melden:
+            melden(f"{teamname} greift Abschnitt {nr} an")
+        teil = llm_json(MODEL_CONTRA, CONTRA_SYSTEM,
+                        f"Auditkriterium\n{kriterium}\n\nAssurance Case\n"
+                        f"{json.dumps(fall, ensure_ascii=False)}\n\nNachweise\n{material}",
+                        audit, schluessel)
+        for x in teil.get("einwaende", []):
+            # Die zusaetzlichen Teams bekommen ein eigenes Kuerzel, damit sich die
+            # Nummern der Einwaende nicht gegenseitig ueberschreiben.
+            kennung = "" if i == 0 else f"T{i + 1}-"
+            x["id"] = f"{praefix}-{kennung}{x.get('id', 'E')}"
+            x["abschnitt"] = nr
+            x["team"] = teamname
+            zitate_pruefen(x.get("nachweise"), quellen)
+            einw["einwaende"].append(x)
     erw = {"erwiderungen": []}
     if mit_erwiderung and einw.get("einwaende"):
         if melden:
@@ -873,6 +980,7 @@ def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True, melden=
         "pruefpunkte": abschnitt.get("pruefpunkte", []), "kriterium": kriterium,
         "fall": fall, "einwaende": einw, "erwiderungen": erw,
         "modelle": {"pro": MODEL_PRO, "contra": MODEL_CONTRA},
+        "teams": [agent_name(audit, s) for s in contra_schluessel(audit)],
         "zeit": datetime.now().isoformat(timespec="seconds")}
 
 
@@ -1070,6 +1178,99 @@ def phasen_schaltflaeche(erledigt: dict) -> int:
         st.caption(text)
     st.divider()
     return schritt
+
+
+def besetzung_feld(audit: dict):
+    """Steuerung, wie viele und welche Teams in der Pruefung laufen."""
+    g = besetzung(audit)
+    st.markdown("**Besetzung der Prüfung**")
+    st.caption("Konstruktionsteam und Falsifikationsteam laufen immer. Ohne diese beiden gäbe es "
+               "keine Gegenrede, sondern nur eine Meinung, und genau darauf beruht das Verfahren.")
+    s1, s2 = st.columns([3, 2])
+    g["falsifikationsteams"] = s1.radio(
+        "Wie viele Falsifikationsteams greifen den Nachweis an", [1, 2, 3],
+        index=g["falsifikationsteams"] - 1, horizontal=True,
+        key=f"bes_anzahl_{audit['id']}",
+        help="Mehrere Teams greifen mit unterschiedlichen Schwerpunkten an. Das findet mehr, "
+             "dauert aber länger und erzeugt mehr Zweifel, über die Sie entscheiden müssen.")
+    g["erwiderung"] = s2.checkbox(
+        "Erwiderungsrunde des Konstruktionsteams", value=bool(g["erwiderung"]),
+        key=f"bes_erwiderung_{audit['id']}",
+        help="Das Konstruktionsteam darf auf jeden Einwand antworten. Abschalten verkürzt den "
+             "Lauf, nimmt Ihnen aber die Gegenseite vor dem Urteil.")
+
+    aktive = ["pro"] + contra_schluessel(audit) + (["erwiderung"] if g["erwiderung"] else [])
+    zeilen = []
+    for schluessel in aktive:
+        marke = "fest" if schluessel in PFLICHTTEAMS else "zugeschaltet"
+        zeilen.append(f"✓ {agent_name(audit, schluessel)} · *{marke}*")
+    if not g["erwiderung"]:
+        zeilen.append("○ Erwiderung des Konstruktionsteams · *abgeschaltet*")
+    st.markdown("  \n".join(zeilen))
+    abschnitte_anzahl = max(1, len(audit.get("kriterien") or []))
+    aufrufe = len(aktive) * abschnitte_anzahl
+    st.caption(f"Dieser Lauf macht {aufrufe} Modellaufrufe, also {len(aktive)} je Normabschnitt "
+               f"bei {abschnitte_anzahl} gewählten Abschnitten. Rechnen Sie mit etwa einer "
+               "Minute je Aufruf.")
+
+
+def team_feld(audit: dict, schluessel: str, standardname: str, zweck: str, prompt: str,
+              modell: str):
+    """Ein Teamkarte mit Name, anklickbaren Musterrollen und Zusatzanweisung."""
+    eintrag = audit.setdefault("agenten", {}).setdefault(schluessel, {"name": "", "rolle": ""})
+    rollenfeld = f"ar_{audit['id']}_{schluessel}"
+    if rollenfeld not in st.session_state:
+        st.session_state[rollenfeld] = eintrag.get("rolle", "")
+    st.caption(zweck)
+    st.markdown(f"Arbeitet mit dem {modell}.")
+
+    muster = MUSTERROLLEN.get(schluessel, [])
+    if muster:
+        st.caption("Muster für das Rollenverständnis. Anklicken, dann steht der Text unten "
+                   "im Feld und lässt sich dort weiter anpassen.")
+        spalten = st.columns(len(muster) + 1)
+        for spalte, (titel, text) in zip(spalten, muster):
+            if spalte.button(titel, key=f"mu_{audit['id']}_{schluessel}_{titel}",
+                             use_container_width=True):
+                st.session_state[rollenfeld] = text
+                eintrag["rolle"] = text
+                st.rerun()
+        if spalten[-1].button("Feld leeren", key=f"ml_{audit['id']}_{schluessel}",
+                              use_container_width=True):
+            st.session_state[rollenfeld] = ""
+            eintrag["rolle"] = ""
+            st.rerun()
+
+    eintrag["name"] = st.text_input("Name dieses Teams", value=eintrag.get("name", ""),
+                                    key=f"an_{audit['id']}_{schluessel}",
+                                    placeholder=standardname)
+    eintrag["rolle"] = st.text_area(
+        "Rollenverständnis", height=100, key=rollenfeld,
+        placeholder="Beispiel: Du bist ein erfahrener Auditor aus der Medizintechnik und legst "
+                    "besonderen Wert auf Rückverfolgbarkeit.")
+    audit.setdefault("prompt_zusatz", {})[schluessel] = st.text_area(
+        "Zusätzliche Anweisung für dieses Audit",
+        value=audit["prompt_zusatz"].get(schluessel, ""), height=80,
+        key=f"pz_{audit['id']}_{schluessel}",
+        placeholder="Beispiel: Achte besonders auf Fristen und auf Dokumente ohne Freigabevermerk.")
+    with st.expander("Grundanweisung dieses Teams anzeigen"):
+        st.code(prompt, language="text")
+
+
+def teamliste(audit: dict) -> list:
+    """Alle Teams in Arbeitsreihenfolge, zugeschaltete Falsifikationsteams eingereiht."""
+    aktiv = contra_schluessel(audit)
+    liste = []
+    for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
+        liste.append((schluessel, standardname, phase, zweck, prompt, modell))
+        if schluessel == "contra":
+            for zusatz, zusatzname in ZUSATZ_CONTRA:
+                if zusatz in aktiv:
+                    liste.append((zusatz, zusatzname, phase,
+                                  "Greift denselben Nachweis aus einer anderen Richtung an. "
+                                  "Geben Sie ihm einen eigenen Schwerpunkt, sonst findet er "
+                                  "dasselbe wie das erste Team.", prompt, modell))
+    return liste
 
 
 def nachweise_anzeigen(nachweise, leer_hinweis="Kein Nachweis angegeben."):
@@ -1747,12 +1948,23 @@ def bericht_docx(audit: dict) -> bytes:
     d.add_heading("5.1.2  Regelkreis Leistungserbringung und Unterstützung", level=3)
     feldtext("regelkreis_leistung")
     d.add_heading("5.1.3  Angewandtes Prüfverfahren", level=3)
+    angreifer = []
+    for erg in audit.get("analysen", {}).values():
+        for name in erg.get("teams", []):
+            if name not in angreifer:
+                angreifer.append(name)
+    if not angreifer:
+        angreifer = [agent_name(audit, "contra")]
+    gegner = (angreifer[0] if len(angreifer) == 1
+              else ", ".join(angreifer[:-1]) + " und " + angreifer[-1])
     absatz("Die Dokumentenanalyse wurde durch ein Mehragentensystem unterstützt. "
            f"{agent_name(audit, 'pro')} hat je Normabschnitt den Konformitätsnachweis "
-           f"konstruiert, {agent_name(audit, 'contra')} hat diesen Nachweis angegriffen und "
-           "nach widersprechenden Nachweisen und ungestützten Annahmen gesucht. Jedes Zitat "
-           "wurde maschinell gegen die Quelldatei geprüft. Über jeden verbliebenen Zweifel hat "
-           "der Auditor entschieden und die Entscheidung begründet.")
+           f"konstruiert. {gegner} "
+           + ("hat" if len(angreifer) == 1 else "haben")
+           + " diesen Nachweis angegriffen und nach widersprechenden Nachweisen und "
+             "ungestützten Annahmen gesucht. Jedes Zitat wurde maschinell gegen die Quelldatei "
+             "geprüft. Über jeden verbliebenen Zweifel hat der Auditor entschieden und die "
+             "Entscheidung begründet.")
     tabelle([("Geprüfte Normabschnitte", k["abschnitte"]),
              ("Erzeugte Zweifel", k["einwaende"]),
              ("Davon durch den Auditor ausgeräumt", k["ausgeraeumt"]),
@@ -1951,7 +2163,6 @@ with st.sidebar:
             st.rerun()
     with st.expander("Technik"):
         st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
-        schnell = st.checkbox("Schnellmodus ohne Erwiderungsrunde", value=False)
         if not API_KEY:
             st.error("Kein API-Schlüssel in den Secrets hinterlegt.")
 
@@ -2123,33 +2334,30 @@ elif bereich == "Einzelaudit":
                         st.markdown(f"- {n}")
         st.divider()
         st.markdown("**Auditteam zusammenstellen**")
-        st.caption("Jede Rolle ist ein eigener Agent und lässt sich umbenennen, im "
-                   "Rollenverständnis schärfen und mit einer Zusatzanweisung versehen. Das "
-                   "dialektische Prinzip bleibt erhalten, denn ein Team baut den Nachweis und "
+        st.caption("Jedes Team ist ein eigener Agent. Sie bestimmen, wie viele davon in der "
+                   "Prüfung arbeiten, und können jedem einen Namen, ein Rollenverständnis und "
+                   "eine Zusatzanweisung geben. Für das Rollenverständnis gibt es Muster zum "
+                   "Anklicken. Zwei Teams sind fest gesetzt, denn eines baut den Nachweis und "
                    "ein zweites greift ihn an.")
+        with st.container(border=True):
+            besetzung_feld(audit)
         audit.setdefault("agenten", {})
-        for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
-            eintrag = audit["agenten"].setdefault(schluessel, {"name": "", "rolle": ""})
-            with st.container(border=True):
-                st.markdown(f"**{standardname}** · Phase {phase} · {modell}")
-                st.caption(zweck)
-                s1, s2 = st.columns([1, 2])
-                eintrag["name"] = s1.text_input(
-                    "Name dieses Teams", value=eintrag.get("name", ""),
-                    key=f"an_{audit['id']}_{schluessel}", placeholder=standardname)
-                eintrag["rolle"] = s2.text_area(
-                    "Rollenverständnis", value=eintrag.get("rolle", ""), height=70,
-                    key=f"ar_{audit['id']}_{schluessel}",
-                    placeholder="Beispiel: Du bist ein erfahrener Auditor aus der Medizintechnik "
-                                "und legst besonderen Wert auf Rückverfolgbarkeit.")
-                audit["prompt_zusatz"][schluessel] = st.text_area(
-                    "Zusätzliche Anweisung für dieses Audit",
-                    value=audit["prompt_zusatz"].get(schluessel, ""), height=70,
-                    key=f"pz_{audit['id']}_{schluessel}",
-                    placeholder="Beispiel: Achte besonders auf Fristen und auf Dokumente ohne "
-                                "Freigabevermerk.")
-                with st.expander("Grundanweisung dieses Teams anzeigen"):
-                    st.code(prompt, language="text")
+        aktive_contra = contra_schluessel(audit)
+        for schluessel, standardname, phase, zweck, prompt, modell in teamliste(audit):
+            if schluessel in PFLICHTTEAMS:
+                marke = "läuft immer mit"
+            elif schluessel in aktive_contra:
+                marke = "zugeschaltet"
+            elif schluessel == "erwiderung":
+                marke = ("läuft mit" if besetzung(audit)["erwiderung"] else "abgeschaltet")
+            elif schluessel == "vorbereitung":
+                marke = "nur, wenn keine Normabschnitte gewählt sind"
+            else:
+                marke = f"arbeitet in der Phase {phase}"
+            eigen = agent_name(audit, schluessel)
+            titel = standardname if eigen == standardname else f"{eigen} ({standardname})"
+            with st.expander(f"{titel} · {marke}"):
+                team_feld(audit, schluessel, standardname, zweck, prompt, modell)
 
         if audit.get("kriterien"):
             zeilen = [f"# Auditplan {audit['titel']}", "",
@@ -2217,16 +2425,25 @@ elif bereich == "Einzelaudit":
         with hilfe_r:
             audix_hilfe("pruefung")
 
-        with st.expander("Welche Teams hier arbeiten"):
-            for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
-                if phase != "Check":
-                    continue
-                st.markdown(f"**{agent_name(audit, schluessel)}** · {modell}")
-                st.caption(zweck)
-                if agent_rolle(audit, schluessel):
-                    st.caption("Rollenverständnis · " + agent_rolle(audit, schluessel))
-            st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie unter Plan "
-                       "bei der Vorbereitung ein.")
+        with st.container(border=True):
+            besetzung_feld(audit)
+            with st.expander("Was die einzelnen Teams mitbringen"):
+                for schluessel in ["pro"] + contra_schluessel(audit) + ["erwiderung"]:
+                    if schluessel == "erwiderung" and not besetzung(audit)["erwiderung"]:
+                        continue
+                    st.markdown(f"**{agent_name(audit, schluessel)}**")
+                    rolle = agent_rolle(audit, schluessel).strip()
+                    st.caption(rolle or "Kein eigenes Rollenverständnis hinterlegt, das Team "
+                                         "arbeitet mit seiner Grundanweisung.")
+                zusatz = [s for s in contra_schluessel(audit) if s != "contra"
+                          and not agent_rolle(audit, s).strip()]
+                if zusatz:
+                    st.warning("Mindestens ein zugeschaltetes Falsifikationsteam hat keinen "
+                               "eigenen Schwerpunkt. Ohne eigenen Schwerpunkt findet es "
+                               "weitgehend dasselbe wie das erste Team. Setzen Sie den "
+                               "Schwerpunkt unter Plan bei der Vorbereitung.")
+                st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie unter Plan "
+                           "bei der Vorbereitung ein.")
 
         if not quellen_sammeln(audit):
             st.warning("Bitte zuerst unter Plan bei der Aufgabe Nachweise Unterlagen erfassen.")
@@ -2236,7 +2453,10 @@ elif bereich == "Einzelaudit":
                 balken = st.progress(0.0, text="Vorbereitung")
                 protokoll = st.empty()
                 try:
-                    schritte_gesamt = max(1, len(audit.get("kriterien") or [1]) * 3 + 1)
+                    je_abschnitt = 1 + len(contra_schluessel(audit)) + (
+                        1 if besetzung(audit)["erwiderung"] else 0)
+                    schritte_gesamt = max(
+                        1, len(audit.get("kriterien") or [1]) * je_abschnitt + 1)
                     zaehler = {"n": 0}
 
                     def melden(text):
@@ -2253,11 +2473,12 @@ elif bereich == "Einzelaudit":
                         audit["umfang"] = vor.get("umfang", audit.get("umfang", ""))
                         audit["planbegruendung"] = vor.get("begruendungen", {})
                         audit["fehlende_nachweise"] = vor.get("fehlende_nachweise", [])
-                        schritte_gesamt = len(audit["kriterien"]) * 3 + 1
+                        schritte_gesamt = len(audit["kriterien"]) * je_abschnitt + 1
                     for nr in audit["kriterien"]:
                         if nr in audit.get("analysen", {}):
                             continue
-                        analyse_durchfuehren(audit, katalog, abschnitte[nr], not schnell, melden)
+                        analyse_durchfuehren(audit, katalog, abschnitte[nr],
+                                             besetzung(audit)["erwiderung"], melden)
                     audit["status"] = "durchgeführt"
                     balken.progress(1.0, text="Prüfung abgeschlossen")
                     st.rerun()
@@ -2366,7 +2587,9 @@ elif bereich == "Einzelaudit":
                                                                      e.get("schwere", ""))
                                 st.markdown(
                                     f"- ID · `{e.get('id')}`  \n"
-                                    f"  Art · {TYPEN.get(e.get('typ'), e.get('typ'))}  \n"
+                                    + (f"  Erhoben von · {e['team']}  \n"
+                                       if e.get("team") else "")
+                                    + f"  Art · {TYPEN.get(e.get('typ'), e.get('typ'))}  \n"
                                     f"  Schweregrad · {schwere}  \n"
                                     f"  Begründung · {e.get('begruendung', '')}")
                                 nachweise_anzeigen(e.get("nachweise"),
@@ -2538,7 +2761,8 @@ elif bereich == "Einzelaudit":
                     st.markdown(f"#### {eid} · {TYPEN.get(e.get('typ'), e.get('typ'))} "
                                 f"· Schwere {e.get('schwere')}")
                     st.caption(f"Normabschnitt {e.get('abschnitt')} · "
-                               f"betrifft Prüfpunkt {e.get('ziel')}")
+                               f"betrifft Prüfpunkt {e.get('ziel')}"
+                               + (f" · erhoben von {e['team']}" if e.get("team") else ""))
                     links, rechts = st.columns(2)
                     with links:
                         st.markdown("**Zweifel des Falsifikationsteams**")
