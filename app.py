@@ -62,11 +62,11 @@ allein du.
 
 1. Im **Auditprogramm** legst du die Audits des Jahres an.
 2. Im **Einzelaudit** führst du eines davon durch. Dieser Teil folgt dem PDCA-Zyklus, also
-   Vorbereitung, Nachweise, Prüfung, Gespräch vor Ort, Urteil, Bericht und Massnahmen.
+   also Plan, Do, Check und Act. Jede Phase hat ihre eigenen Aufgaben.
 3. Unter **Massnahmen** verfolgst du über alle Audits hinweg, ob die vereinbarten
    Massnahmen wirksam waren.
 
-Oben rechts findest du auf jedem Reiter den Knopf **Audix fragen**. Dort erkläre ich dir, was
+Oben rechts findest du bei jeder Aufgabe den Knopf **Audix fragen**. Dort erkläre ich dir, was
 an dieser Stelle zu tun ist, und dort kannst du mir auch direkt Fragen stellen. Ich kenne deinen
 Arbeitsstand, du musst mir also nicht erklären, wo du gerade stehst. Fangen wir an."""
 
@@ -102,7 +102,7 @@ Normabschnitte im Jahresprogramm noch gar nicht vorkommen.""",
 Lade dir den Auditplan mit Checkliste herunter und schicke ihn vorab an den Fachbereich. Dann
 liegen die richtigen Unterlagen schon bereit, wenn du kommst.""",
 
-    "durchfuehrung": """**Do. Jetzt wird gesammelt.**
+    "durchfuehrung": """**Plan. Jetzt wird gesammelt.**
 
 **Was du jetzt tust**
 - Lade die Dokumente hoch, also Verfahrensanweisungen, Listen, Protokolle, Formulare.
@@ -118,7 +118,7 @@ Genau dort stecken die Feststellungen, die wirklich etwas verändern.
 Wenn du nach einer Prüfung noch Notizen ergänzt, musst du den betreffenden Abschnitt erneut
 prüfen lassen. Sonst kenne ich sie nicht.""",
 
-    "pruefung": """**Check. Jetzt arbeiten meine Teams gegeneinander.**
+    "pruefung": """**Do. Jetzt arbeiten meine Teams gegeneinander.**
 
 **Was passiert, wenn du auf Prüfung starten klickst**
 1. Mein Vorbereitungsteam wählt die Normabschnitte, falls du das noch nicht getan hast.
@@ -156,8 +156,8 @@ Zu jedem Zweifel aus der Prüfung bekommst du
 **Was du jetzt tust**
 - Erzeuge die Fragen und lade dir den Leitfaden als Word-Datei herunter. Nimm ihn mit.
 - Trage nach dem Termin ein, was du gesehen und gehört hast, möglichst wörtlich.
-- Setze das Ergebnis je Frage. Das erscheint danach beim passenden Zweifel im Reiter Urteil und
-  geht als objektiver Nachweis in den Bericht.
+- Setze das Ergebnis je Frage. Das erscheint danach beim passenden Zweifel unter Check bei der Aufgabe
+  Urteil und geht als objektiver Nachweis in den Bericht.
 
 **Mein Tipp**
 Lies die Antwort nicht vor und lass sie dir nicht vorformulieren. Der Wert dieses Schrittes
@@ -276,8 +276,8 @@ def audix_kontext(schluessel: str) -> str:
     """Beschreibt Audix, wo der Auditor gerade steht und woran er arbeitet."""
     phasen = {"programm": "Auditprogramm des Jahres (Phase Plan)",
               "vorbereitung": "Auditvorbereitung und Auditteam (Phase Plan)",
-              "durchfuehrung": "Durchführung, Sammeln der Nachweise (Phase Do)",
-              "pruefung": "Dialektische Prüfung durch die Agententeams (Phase Check)",
+              "durchfuehrung": "Nachweise zusammenstellen (Phase Plan)",
+              "pruefung": "Dialektische Prüfung durch die Agententeams (Phase Do)",
               "vorort": "Gesprächsleitfaden und Beobachtungen vor Ort (Phase Do)",
               "urteil": "Urteil des Auditors über die Zweifel (Phase Check)",
               "bericht": "Auditbericht (Phase Check)",
@@ -564,15 +564,15 @@ AGENTEN = [
     ("vorbereitung", "Vorbereitungsteam", "Plan",
      "Liest die Nachweise, wählt die passenden Normabschnitte, schreibt Auditziel und Umfang "
      "und nennt fehlende Nachweise.", SCOPING_SYSTEM, "Konstruktionsmodell"),
-    ("pro", "Konstruktionsteam", "Check",
+    ("pro", "Konstruktionsteam", "Do",
      "Baut je Normabschnitt den bestmöglichen Konformitätsnachweis und markiert unbelegte "
      "Annahmen offen. Es ist bewusst der Anwalt der Organisation.", PRO_SYSTEM,
      "Konstruktionsmodell"),
-    ("contra", "Falsifikationsteam", "Check",
+    ("contra", "Falsifikationsteam", "Do",
      "Greift diesen Nachweis an und sucht widerlegende, untergrabende und unterlaufende "
      "Nachweise sowie ungestützte Annahmen. Es ist bewusst der Gegenspieler.", CONTRA_SYSTEM,
      "Falsifikationsmodell"),
-    ("erwiderung", "Erwiderung des Konstruktionsteams", "Check",
+    ("erwiderung", "Erwiderung des Konstruktionsteams", "Do",
      "Antwortet auf jeden Einwand und gesteht zu, was die Nachweise stützen.",
      ERWIDERUNG_SYSTEM, "Konstruktionsmodell"),
     ("vorort", "Leitfadenteam", "Do",
@@ -607,6 +607,24 @@ TYPEN = {"widerlegend": "Nachweise sprechen dagegen",
          "ungestuetzte_annahme": "Behauptung ohne Nachweis"}
 VORORT_ERGEBNIS = ["noch nicht geprüft", "in der Praxis bestätigt", "teilweise bestätigt",
                    "nicht bestätigt", "nicht anwendbar"]
+
+# Der Auditablauf als Regelkreis. Je Phase die Aufgaben in der Reihenfolge, in der
+# sie bearbeitet werden. Die Nummer ist zugleich der Schluessel des Inhaltsblocks.
+PHASEN = [
+    ("Plan", "#3b7ddd", "Das Audit vorbereiten und die Grundlage zusammentragen.",
+     [(1, "Vorbereitung", "Auditziel, Umfang, Normabschnitte und Auditteam festlegen."),
+      (2, "Nachweise", "Unterlagen, Gesprächsnotizen und Leistungsdaten zusammenstellen.")]),
+    ("Do", "#4a9d5f", "Das Audit durchführen und die Nachweise erheben.",
+     [(3, "Prüfung", "Die Agententeams bauen den Konformitätsnachweis und greifen ihn an."),
+      (4, "Vor Ort", "Gespräch führen, beobachten, Stichproben ziehen und festhalten.")]),
+    ("Check", "#d9a431", "Die Nachweise bewerten und das Ergebnis dokumentieren.",
+     [(5, "Urteil", "Über jeden Zweifel entscheiden und die Entscheidung begründen."),
+      (6, "Bericht", "Feststellungen und Ergebnis nachvollziehbar dokumentieren.")]),
+    ("Act", "#cf5a52", "Verbessern und die Wirkung nachhalten.",
+     [(7, "Massnahmen", "Verbesserungen festlegen, zuordnen und Wirksamkeit nachverfolgen.")])]
+
+SCHRITT_PHASE = {nr: name for name, _, _, aufgaben in PHASEN for nr, _, _ in aufgaben}
+SCHRITT_NAME = {nr: titel for _, _, _, aufgaben in PHASEN for nr, titel, _ in aufgaben}
 RISIKO = ["hoch", "mittel", "gering"]
 STATUS = ["geplant", "in Vorbereitung", "durchgeführt", "berichtet", "abgeschlossen"]
 MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt", "nicht wirksam"]
@@ -986,6 +1004,72 @@ def kennzahlen(audit: dict) -> dict:
             "massnahmen": len(mass),
             "massnahmen_offen": sum(1 for m in mass
                                     if m.get("status") in ("offen", "in Umsetzung"))}
+
+
+def phasen_schaltflaeche(erledigt: dict) -> int:
+    """Der Regelkreis als Schaltflaeche. Gibt die gewaehlte Aufgabe zurueck."""
+    phase = st.session_state.setdefault("phase", "Plan")
+    schritt = st.session_state.setdefault("schritt", 1)
+    if SCHRITT_PHASE.get(schritt) != phase:
+        schritt = next(a[0] for n, _, _, a in PHASEN if n == phase)
+        st.session_state.schritt = schritt
+    farben = {n: f for n, f, _, _ in PHASEN}
+    aufgabe_schluessel = ", ".join(f".st-key-auf_{n} button" for n in SCHRITT_NAME)
+    aufgabe_innen = ", ".join(f".st-key-auf_{n} button div, .st-key-auf_{n} button span"
+                              for n in SCHRITT_NAME)
+
+    regeln = [
+        # Die vier Phasenfelder. Nur das gewaehlte Feld ist gefuellt.
+        ".st-key-ph_Plan button, .st-key-ph_Do button, .st-key-ph_Check button, "
+        ".st-key-ph_Act button {height:5rem; border-radius:0.8rem; border:1px solid "
+        "transparent; background-color:transparent; box-shadow:none;}",
+        # Die Aufgaben als flache, linksbuendige Zeilen
+        aufgabe_schluessel + " {justify-content:flex-start; text-align:left; "
+        "background-color:transparent; border:none; box-shadow:none; padding:0.3rem 0.6rem;}",
+        # Streamlit zentriert die Beschriftung in zwei inneren Huellen. Beide umstellen.
+        aufgabe_innen + " {justify-content:flex-start; text-align:left; width:100%;}"]
+    for name, farbe, _, aufgaben in PHASEN:
+        if name == phase:
+            regeln.append(f".st-key-ph_{name} button, .st-key-ph_{name} button:hover, "
+                          f".st-key-ph_{name} button:focus {{background-color:{farbe}; "
+                          f"border-color:{farbe};}}")
+            regeln.append(f".st-key-ph_{name} button p {{color:#ffffff; font-weight:700;}}")
+        else:
+            regeln.append(f".st-key-ph_{name} button:hover {{background-color:{farbe}1f; "
+                          f"border-color:{farbe};}}")
+    aktiv_farbe = farben.get(phase, "#3b7ddd")
+    regeln.append(f".st-key-auf_{schritt} button {{background-color:{aktiv_farbe}1f; "
+                  f"border-left:4px solid {aktiv_farbe};}}")
+    regeln.append(f".st-key-auf_{schritt} button p {{font-weight:700;}}")
+    st.markdown("<style>" + "".join(regeln) + "</style>", unsafe_allow_html=True)
+
+    st.caption("Der Auditablauf als Regelkreis. Wählen Sie eine Phase.")
+    for reihe in (PHASEN[:2], PHASEN[2:]):
+        spalten = st.columns(2)
+        for spalte, (name, _, _, aufgaben) in zip(spalten, reihe):
+            with spalte:
+                wort = "Aufgabe" if len(aufgaben) == 1 else "Aufgaben"
+                fertig = sum(1 for nr, _, _ in aufgaben if erledigt.get(nr))
+                zusatz = (" · alle erledigt" if fertig == len(aufgaben)
+                          else f" · {fertig} erledigt" if fertig else "")
+                if st.button(f"{name}  \n{len(aufgaben)} {wort}{zusatz}", key=f"ph_{name}",
+                             use_container_width=True):
+                    st.session_state.phase = name
+                    st.session_state.schritt = aufgaben[0][0]
+                    st.rerun()
+    st.divider()
+
+    name, _, zweck, aufgaben = next(p for p in PHASEN if p[0] == phase)
+    st.markdown(f"**{name} · Aufgabenübersicht**")
+    st.caption(zweck)
+    for nr, titel, text in aufgaben:
+        marke = "✓" if erledigt.get(nr) else "○"
+        if st.button(f"{marke}  {nr}  {titel}", key=f"auf_{nr}", use_container_width=True):
+            st.session_state.schritt = nr
+            st.rerun()
+        st.caption(text)
+    st.divider()
+    return schritt
 
 
 def nachweise_anzeigen(nachweise, leer_hinweis="Kein Nachweis angegeben."):
@@ -1380,7 +1464,8 @@ def feld_vorbelegung(audit: dict, schluessel: str) -> str:
                               for n in zahlen)
         return ("Bitte ergänzen: Entwicklung der relevanten Kennzahlen, etwa Mengen, "
                 "Reklamationen, Termintreue, Ausschuss oder Durchlaufzeiten, mit Vergleich zur "
-                "Vorperiode. Leistungsdaten können im Reiter Durchführung erfasst werden, dann "
+                "Vorperiode. Leistungsdaten können unter Plan bei den Nachweisen erfasst "
+                "werden, dann "
                 "erscheinen sie hier automatisch.")
     if schluessel == "erledigung_vorjahr":
         return ("Bitte ergänzen: Stand der Korrekturmassnahmen aus früheren Audits und Bewertung "
@@ -1961,15 +2046,15 @@ elif bereich == "Einzelaudit":
     audit.setdefault("prompt_zusatz", {})
 
     with audit_platz:
-        schritte = [("Vorbereitung", "Plan", bool(audit.get("kriterien"))),
-                    ("Nachweise gesammelt", "Do", bool(quellen_sammeln(audit))),
-                    ("Prüfung gelaufen", "Check", bool(audit.get("analysen"))),
-                    ("Vor Ort geprüft", "Do",
-                     k["fragen"] > 0 and k["fragen_geprueft"] == k["fragen"]),
-                    ("Urteile vollständig", "Check",
-                     k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"]),
-                    ("Bericht erstellt", "Check", bool(audit.get("feststellungen"))),
-                    ("Massnahmen festgelegt", "Act", bool(audit.get("massnahmen")))]
+        erledigt = {1: bool(audit.get("kriterien")),
+                    2: bool(quellen_sammeln(audit)),
+                    3: bool(audit.get("analysen")),
+                    4: k["fragen"] > 0 and k["fragen_geprueft"] == k["fragen"],
+                    5: k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"],
+                    6: bool(audit.get("feststellungen")),
+                    7: bool(audit.get("massnahmen"))}
+        schritte = [(SCHRITT_NAME[nr], SCHRITT_PHASE[nr], erledigt[nr])
+                    for nr in sorted(SCHRITT_NAME)]
         fertig_anzahl = sum(1 for _, _, f in schritte if f)
         st.progress(fertig_anzahl / len(schritte),
                     text=f"{fertig_anzahl} von {len(schritte)} Schritten erledigt")
@@ -1979,12 +2064,10 @@ elif bereich == "Einzelaudit":
             f"{'✓' if fertig else '○'} {name} · *{phase}*"
             for name, phase, fertig in schritte))
 
-    t1, t2, t3, t4, t5, t6, t7 = st.tabs(
-        ["1 Vorbereitung (Plan)", "2 Nachweise (Do)", "3 Prüfung (Check)",
-         "4 Vor Ort (Do)", "5 Urteil (Check)", "6 Bericht (Check)", "7 Massnahmen (Act)"])
+    schritt = phasen_schaltflaeche(erledigt)
 
     # ---------------- 1 Vorbereitung (Plan)
-    with t1:
+    if schritt == 1:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("vorbereitung")
@@ -2023,8 +2106,8 @@ elif bereich == "Einzelaudit":
         st.caption("Diese Übersicht ist zugleich Ihre Auditcheckliste und die Liste der "
                    "Unterlagen, die Sie beim Fachbereich anfordern sollten.")
         if not audit.get("kriterien"):
-            st.info("Noch keine Normabschnitte gewählt. Entweder oben auswählen oder im Reiter "
-                    "Prüfung vom System vorschlagen lassen.")
+            st.info("Noch keine Normabschnitte gewählt. Entweder oben auswählen oder unter Do "
+                    "bei der Prüfung vom System vorschlagen lassen.")
         for nr in audit.get("kriterien", []):
             a = abschnitte.get(nr)
             if not a:
@@ -2086,8 +2169,8 @@ elif bereich == "Einzelaudit":
             st.download_button("Auditplan mit Checkliste herunterladen", "\n".join(zeilen),
                                file_name=f"auditplan_{audit['id']}.md")
 
-    # ---------------- 2 Nachweise (Do)
-    with t2:
+    # ---------------- 2 Nachweise (Plan)
+    if schritt == 2:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("durchfuehrung")
@@ -2128,8 +2211,8 @@ elif bereich == "Einzelaudit":
                     audit["notizen"].pop(i)
                     st.rerun()
 
-    # ---------------- 3 Dialektische Pruefung (Check)
-    with t3:
+    # ---------------- 3 Pruefung (Do)
+    if schritt == 3:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("pruefung")
@@ -2142,11 +2225,11 @@ elif bereich == "Einzelaudit":
                 st.caption(zweck)
                 if agent_rolle(audit, schluessel):
                     st.caption("Rollenverständnis · " + agent_rolle(audit, schluessel))
-            st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie im Reiter "
-                       "Vorbereitung ein.")
+            st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie unter Plan "
+                       "bei der Vorbereitung ein.")
 
         if not quellen_sammeln(audit):
-            st.warning("Bitte zuerst im Reiter Durchführung Nachweise erfassen.")
+            st.warning("Bitte zuerst unter Plan bei der Aufgabe Nachweise Unterlagen erfassen.")
         else:
             start = st.button("Prüfung starten", type="primary", use_container_width=True)
             if start:
@@ -2187,7 +2270,7 @@ elif bereich == "Einzelaudit":
                 s2.metric("Gefundene Zweifel", k["einwaende"])
                 s3.metric("Zitate belegt", f"{k['zitate_belegt']} / {k['zitate']}")
                 s4.metric("Noch zu beurteilen", k["einwaende"] - k["beurteilt"])
-                st.caption("Diese Prüfung beruht allein auf Unterlagen. Im Reiter Vor Ort mache "
+                st.caption("Diese Prüfung beruht allein auf Unterlagen. Bei der Aufgabe Vor Ort mache "
                            "ich aus jedem Zweifel eine Frage für das Gespräch, damit Sie prüfen "
                            "können, ob der Prozess auch gelebt wird.")
                 if k["zitate"] and k["zitate_belegt"] < k["zitate"]:
@@ -2214,7 +2297,7 @@ elif bereich == "Einzelaudit":
                     st.write(erg.get("anforderung", ""))
                     st.markdown(f"**Gesamtbefund des Systems** · {zeichen} {lage}")
                     st.caption("Befund des Systems auf Basis der Unterlagen. Die Feststellung "
-                               "trifft der Auditor im Reiter Urteil.")
+                               "trifft der Auditor unter Check bei der Aufgabe Urteil.")
                     for t in erg.get("fall", {}).get("teilaussagen", []):
                         z, kurz = ampel_teilaussage(t, einwaende_abschnitt, urteile)
                         zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
@@ -2334,7 +2417,7 @@ elif bereich == "Einzelaudit":
                         st.code(p.get("ausgabe", ""), language="json")
 
     # ---------------- 4 Vor Ort (Do)
-    with t4:
+    if schritt == 4:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("vorort")
@@ -2344,7 +2427,7 @@ elif bereich == "Einzelaudit":
                    "Merkmale, an denen Sie erkennen, ob der Prozess tatsächlich gelebt wird. "
                    "Das Hinschauen bleibt Ihre Aufgabe, ich bereite es nur vor.")
         if not audit.get("analysen"):
-            st.info("Prüfen Sie zuerst im Reiter Prüfung mindestens einen Normabschnitt. "
+            st.info("Bearbeiten Sie zuerst die Aufgabe Prüfung für mindestens einen Normabschnitt. "
                     "Die Fragen entstehen aus den Zweifeln dieser Prüfung.")
         else:
             audit.setdefault("beobachtungen", {})
@@ -2376,8 +2459,8 @@ elif bereich == "Einzelaudit":
                 st.progress(kz["fragen_geprueft"] / max(1, kz["fragen"]),
                             text=f"{kz['fragen_geprueft']} von {kz['fragen']} Fragen bearbeitet")
                 st.caption("Nehmen Sie den Leitfaden mit in den Termin. Was Sie dort feststellen, "
-                           "tragen Sie hier ein. Es erscheint beim passenden Zweifel im Reiter "
-                           "Urteil und im Auditbericht als objektiver Nachweis.")
+                           "tragen Sie hier ein. Es erscheint beim passenden Zweifel unter "
+                           "Check bei der Aufgabe Urteil und im Auditbericht als objektiver Nachweis.")
 
             for nr in sorted(audit.get("leitfaden", {})):
                 block = audit["leitfaden"][nr]
@@ -2433,7 +2516,7 @@ elif bereich == "Einzelaudit":
                                                            "einwand": f.get("einwand", "")}
 
     # ---------------- 5 Urteil (Check)
-    with t5:
+    if schritt == 5:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("urteil")
@@ -2547,7 +2630,7 @@ elif bereich == "Einzelaudit":
                     st.error(str(f))
 
     # ---------------- 6 Bericht (Check)
-    with t6:
+    if schritt == 6:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("bericht")
@@ -2630,7 +2713,7 @@ elif bereich == "Einzelaudit":
                     use_container_width=True, hide_index=True)
             if any(not a["massnahme"] for a in major + minor):
                 st.warning("Zu mindestens einer Abweichung fehlt noch eine Korrekturmassnahme. "
-                           "Ergänzen Sie sie im Reiter Massnahmen, sonst bleibt die Tabelle "
+                           "Ergänzen Sie sie unter Act bei den Massnahmen, sonst bleibt die Tabelle "
                            "im Bericht leer.")
 
             st.divider()
@@ -2660,7 +2743,7 @@ elif bereich == "Einzelaudit":
                 st.markdown(bericht_markdown(audit))
 
     # ---------------- 7 Massnahmen (Act)
-    with t7:
+    if schritt == 7:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("massnahmen")
