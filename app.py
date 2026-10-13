@@ -3,7 +3,7 @@ Audit-Assistent Qualitaetsmanagement (Webversion)
 Internes Audit nach ISO 9001 entlang des PDCA-Zyklus.
 
 Plan   Auditprogramm und Auditvorbereitung
-Do     Durchfuehrung, Sammeln objektiver Nachweise
+Do     Sammeln objektiver Nachweise, Gespraech und Beobachtung vor Ort
 Check  Dialektische Pruefung durch zwei Agententeams, Urteil des Auditors, Bericht
 Act    Korrekturmassnahmen und Nachverfolgung der Wirksamkeit
 
@@ -44,8 +44,6 @@ AVATAR = Path(__file__).parent / "audix.png"
 
 st.set_page_config(page_title=APP_NAME, page_icon=str(AVATAR) if AVATAR.exists() else None,
                    layout="wide")
-if LOGO.exists():
-    st.logo(str(LOGO), size="large")
 
 
 AUDIX_START = """Hallo, ich bin **Audix** und begleite dich durch dein internes Audit.
@@ -56,11 +54,15 @@ Team greift genau diesen Nachweis an und sucht nach Lücken. Was danach an Zweif
 lege ich dir vor. **Entscheiden musst du**, denn nach ISO 19011 trägt der Auditor die
 Verantwortung für jede Feststellung, nicht die Maschine.
 
+Aus diesen Zweifeln baue ich dir ausserdem den **Gesprächsleitfaden für den Termin vor Ort**.
+Denn ein Dokument zeigt mir nur, was beschrieben ist. Ob danach auch gearbeitet wird, siehst
+allein du.
+
 **So läuft es ab**
 
 1. Im **Auditprogramm** legst du die Audits des Jahres an.
-2. Im **Einzelaudit** führst du eines davon durch. Dieser Teil folgt dem PDCA-Zyklus,
-   also Vorbereitung, Durchführung, Prüfung und Urteil, Bericht und Massnahmen.
+2. Im **Einzelaudit** führst du eines davon durch. Dieser Teil folgt dem PDCA-Zyklus, also
+   Vorbereitung, Nachweise, Prüfung, Gespräch vor Ort, Urteil, Bericht und Massnahmen.
 3. Unter **Massnahmen** verfolgst du über alle Audits hinweg, ob die vereinbarten
    Massnahmen wirksam waren.
 
@@ -134,6 +136,36 @@ heisst, es fehlt ein belastbarer Nachweis.
 **Wichtig**
 Die Ampel ist mein Befund, nicht deine Feststellung. Klapp jeden Prüfpunkt auf, dann siehst du
 die ganze Kette von der Normforderung über die Zitate bis zur Prognose fürs externe Audit.""",
+
+    "vorort": """**Do. Papier ist geduldig, der Betrieb ist es nicht.**
+
+**Warum es diesen Schritt gibt**
+Bis hierher habe ich nur gelesen. Ich sehe, was beschrieben ist, nicht was getan wird. Ob im
+Lager, in der Werkstatt oder am Empfang wirklich so gearbeitet wird, wie es im Handbuch steht,
+stellst nur du fest, durch Beobachtung und Gespräch. Genau dafür bereite ich dir hier das
+Gespräch vor.
+
+**Was ich dir liefere**
+Zu jedem Zweifel aus der Prüfung bekommst du
+- eine offene Frage, die nach der Praxis fragt und nicht nach dem Dokument,
+- zwei Nachfragen für den Fall, dass die erste Antwort zu glatt kommt,
+- eine konkrete Stichprobe, die du im Termin ziehen kannst,
+- die Merkmale, an denen du gelebte Praxis von reinem Papier unterscheidest,
+- und die Gefährdung, die entsteht, wenn die Vorgabe nicht gelebt wird.
+
+**Was du jetzt tust**
+- Erzeuge die Fragen und lade dir den Leitfaden als Word-Datei herunter. Nimm ihn mit.
+- Trage nach dem Termin ein, was du gesehen und gehört hast, möglichst wörtlich.
+- Setze das Ergebnis je Frage. Das erscheint danach beim passenden Zweifel im Reiter Urteil und
+  geht als objektiver Nachweis in den Bericht.
+
+**Mein Tipp**
+Lies die Antwort nicht vor und lass sie dir nicht vorformulieren. Der Wert dieses Schrittes
+steckt in dem, was dir jemand unaufgefordert erzählt, und in dem, was du mit eigenen Augen siehst.
+
+**Normbezug**
+ISO 19011 verlangt objektive Nachweise aus Befragung, Beobachtung und Durchsicht von
+Aufzeichnungen. Eine Dokumentenprüfung allein deckt nur einen Teil davon ab.""",
 
     "urteil": """**Hier endet meine Arbeit und deine beginnt.**
 
@@ -246,6 +278,7 @@ def audix_kontext(schluessel: str) -> str:
               "vorbereitung": "Auditvorbereitung und Auditteam (Phase Plan)",
               "durchfuehrung": "Durchführung, Sammeln der Nachweise (Phase Do)",
               "pruefung": "Dialektische Prüfung durch die Agententeams (Phase Check)",
+              "vorort": "Gesprächsleitfaden und Beobachtungen vor Ort (Phase Do)",
               "urteil": "Urteil des Auditors über die Zweifel (Phase Check)",
               "bericht": "Auditbericht (Phase Check)",
               "massnahmen": "Korrekturmassnahmen (Phase Act)",
@@ -268,7 +301,10 @@ def audix_kontext(schluessel: str) -> str:
                 mz(kz["einwaende"], "Zweifel", "Zweifel") + f", davon {kz['beurteilt']} beurteilt"]) + ".",
             f"Bestätigt sind {mz(kz['abweichungen'], 'Abweichung', 'Abweichungen')} und "
             f"{mz(kz['potenziale'], 'Verbesserungspotenzial', 'Verbesserungspotenziale')}, "
-            f"{kz['offen']} Punkte bleiben für die Prüfung vor Ort offen."]
+            f"{kz['offen']} Punkte bleiben für die Prüfung vor Ort offen.",
+            f"Leitfaden vor Ort: {kz['fragen']} Fragen vorbereitet, "
+            f"{kz['fragen_geprueft']} davon vor Ort bearbeitet, bei {kz['nicht_gelebt']} "
+            "wurde die Praxis nicht oder nur teilweise bestätigt."]
         unbeurteilt = [e for e in alle_einwaende(a)
                        if not a.get("urteile", {}).get(e["id"], {}).get("urteil")]
         if unbeurteilt:
@@ -289,6 +325,8 @@ VORSCHLAEGE = {
                       "Was ist ein objektiver Nachweis?"],
     "pruefung": ["Was bedeutet die gelbe Ampel?",
                  "Worin unterscheiden sich die Einwandtypen?"],
+    "vorort": ["Woran erkenne ich, ob ein Prozess wirklich gelebt wird?",
+               "Wie ziehe ich eine sinnvolle Stichprobe?"],
     "urteil": ["Abweichung oder Verbesserungspotenzial, wie entscheide ich?",
                "Wie formuliere ich eine Feststellung sauber?"],
     "bericht": ["Was gehört in die Begründung in 6.2?",
@@ -494,6 +532,34 @@ Schema
  "korrekturmassnahme": "...", "verantwortlich_rolle": "...", "frist_tage": 30,
  "wirksamkeitsnachweis": "..."}]}"""
 
+VORORT_SYSTEM = """Du bist das LEITFADENTEAM eines internen Audits.
+Die Dokumentenprüfung ist gelaufen. Du erhältst den Konformitätsnachweis, die Einwände des
+Falsifikationsteams, die Erwiderungen und, falls vorhanden, die Urteile des Auditors.
+Deine Aufgabe ist der Gesprächsleitfaden für den Termin vor Ort.
+Eine Unterlage beweist nur, dass etwas beschrieben ist. Ob danach gearbeitet wird, zeigt sich
+erst im Gespräch, in der Beobachtung und an der Stichprobe. Genau dorthin zielen deine Fragen.
+Regeln
+1. Zu jedem Einwand, den der Auditor nicht ausgeräumt hat, mindestens eine Frage. Ergänze
+   höchstens zwei weitere Fragen je Abschnitt zu Punkten, die sich aus Unterlagen grundsätzlich
+   nicht beantworten lassen, etwa Verständnis, Zuständigkeit im Alltag oder Umgang mit Ausnahmen.
+2. Stelle offene Fragen. Keine Ja-Nein-Fragen, keine Suggestivfragen und keine Fragen, welche
+   die gewünschte Antwort schon enthalten.
+3. Frage nach der Praxis, nicht nach dem Papier. Nicht "Gibt es eine Verfahrensanweisung",
+   sondern "Zeigen Sie mir am letzten Fall, wie Sie vorgegangen sind".
+4. Nenne zu jeder Frage eine konkrete Stichprobe mit Zeitraum und Umfang, die der Auditor im
+   Termin ziehen kann, und was er sich dabei zeigen oder vorführen lassen soll.
+5. Beschreibe getrennt, woran man erkennt, dass der Prozess gelebt wird, und woran man erkennt,
+   dass er nur auf dem Papier steht.
+6. Beschreibe die Gefährdung konkret für diesen Prozess, also was im Betrieb, beim Produkt oder
+   beim Kunden schiefgeht, wenn die Vorgabe nicht gelebt wird. Keine allgemeinen Formeln wie
+   Imageschaden oder Qualitätsverlust.
+7. Nenne als Gesprächspartner eine Rolle oder Funktion, niemals einen Personennamen.
+8. Du bewertest nicht, stufst nichts ein und formulierst keine Feststellung.
+Schema
+{"fragen": [{"id": "F1", "einwand": "E1", "thema": "...", "frage": "...",
+ "nachfragen": ["...", "..."], "stichprobe": "...", "beobachten": "...",
+ "gelebt_wenn": "...", "papier_wenn": "...", "gefaehrdung": "...", "wen_fragen": "..."}]}"""
+
 AGENTEN = [
     ("vorbereitung", "Vorbereitungsteam", "Plan",
      "Liest die Nachweise, wählt die passenden Normabschnitte, schreibt Auditziel und Umfang "
@@ -509,6 +575,10 @@ AGENTEN = [
     ("erwiderung", "Erwiderung des Konstruktionsteams", "Check",
      "Antwortet auf jeden Einwand und gesteht zu, was die Nachweise stützen.",
      ERWIDERUNG_SYSTEM, "Konstruktionsmodell"),
+    ("vorort", "Leitfadenteam", "Do",
+     "Übersetzt die offenen Zweifel in Fragen für das Gespräch vor Ort, nennt Stichprobe, "
+     "Beobachtungsmerkmale und die Gefährdung, wenn die Vorgabe nicht gelebt wird.",
+     VORORT_SYSTEM, "Falsifikationsmodell"),
     ("bericht", "Berichtsteam", "Check",
      "Formuliert die Feststellungen aus den Entscheidungen des Auditors. Es darf die "
      "Einstufung nicht ändern.", BERICHT_SYSTEM, "Konstruktionsmodell"),
@@ -535,6 +605,8 @@ TYPEN = {"widerlegend": "Nachweise sprechen dagegen",
          "untergrabend": "Nachweis ist nicht belastbar",
          "unterlaufend": "Nachweis deckt die Anforderung nicht ab",
          "ungestuetzte_annahme": "Behauptung ohne Nachweis"}
+VORORT_ERGEBNIS = ["noch nicht geprüft", "in der Praxis bestätigt", "teilweise bestätigt",
+                   "nicht bestätigt", "nicht anwendbar"]
 RISIKO = ["hoch", "mittel", "gering"]
 STATUS = ["geplant", "in Vorbereitung", "durchgeführt", "berichtet", "abgeschlossen"]
 MSTATUS = ["offen", "in Umsetzung", "umgesetzt", "wirksam bestätigt", "nicht wirksam"]
@@ -791,6 +863,75 @@ def alle_einwaende(audit: dict) -> list:
             for e in erg.get("einwaende", {}).get("einwaende", [])]
 
 
+# ---------------------------------------------------------------------------
+# Leitfaden fuer das Gespraech vor Ort
+# ---------------------------------------------------------------------------
+def leitfaden_erzeugen(audit: dict, abschnitt_nr: str):
+    """Leitet aus der Pruefung eines Abschnitts Fragen fuer den Termin vor Ort ab."""
+    erg = audit.get("analysen", {}).get(abschnitt_nr)
+    if not erg:
+        return
+    urteile = audit.get("urteile", {})
+    einwaende = []
+    for e in erg.get("einwaende", {}).get("einwaende", []):
+        einwaende.append({**e, "urteil_des_auditors":
+                          urteile.get(e["id"], {}).get("urteil", "noch nicht beurteilt")})
+    auftrag = (f"Normabschnitt {abschnitt_nr} {erg.get('titel', '')}\n"
+               f"Anforderung\n{erg.get('anforderung', '')}\n\n"
+               f"Prüfpunkte\n" + "\n".join(f"- {p}" for p in erg.get("pruefpunkte", [])) +
+               "\n\nKonformitätsnachweis\n"
+               f"{json.dumps(erg.get('fall', {}), ensure_ascii=False)}\n\n"
+               f"Einwände mit Urteil des Auditors\n"
+               f"{json.dumps({'einwaende': einwaende}, ensure_ascii=False)}\n\n"
+               f"Erwiderungen\n{json.dumps(erg.get('erwiderungen', {}), ensure_ascii=False)}\n\n"
+               f"Auditierter Prozess {audit.get('prozess', '')}")
+    ergebnis = llm_json(MODEL_CONTRA, VORORT_SYSTEM, auftrag, audit, "vorort")
+    praefix = abschnitt_nr.replace(".", "_")
+    fragen = []
+    for i, fr in enumerate(ergebnis.get("fragen", []), start=1):
+        fr["id"] = f"{praefix}-F{i}"
+        fr["abschnitt"] = abschnitt_nr
+        fragen.append(fr)
+    audit.setdefault("leitfaden", {})[abschnitt_nr] = {
+        "titel": erg.get("titel", ""), "fragen": fragen,
+        "zeit": datetime.now().isoformat(timespec="seconds")}
+
+
+def alle_fragen(audit: dict) -> list:
+    return [f for nr in sorted(audit.get("leitfaden", {}))
+            for f in audit["leitfaden"][nr].get("fragen", [])]
+
+
+def beobachtung(audit: dict, frage_id: str) -> dict:
+    return audit.get("beobachtungen", {}).get(frage_id, {})
+
+
+def beobachtung_zu_einwand(audit: dict, einwand_id: str) -> list:
+    """Alle Fragen samt Beobachtung, die zu einem bestimmten Einwand gehoeren."""
+    treffer = []
+    kurz = einwand_id.split("-", 1)[-1]
+    for f in alle_fragen(audit):
+        bezug = str(f.get("einwand", ""))
+        if bezug and (bezug == einwand_id or bezug.split("-", 1)[-1] == kurz):
+            treffer.append((f, beobachtung(audit, f["id"])))
+    return treffer
+
+
+def vorort_befunde(audit: dict) -> list:
+    """Die vor Ort erfassten Beobachtungen in einer flachen, berichtsfaehigen Liste."""
+    befunde = []
+    for f in alle_fragen(audit):
+        b = beobachtung(audit, f["id"])
+        text = str(b.get("text", "")).strip()
+        ergebnis = b.get("ergebnis", VORORT_ERGEBNIS[0])
+        if not text and ergebnis == VORORT_ERGEBNIS[0]:
+            continue
+        befunde.append({"abschnitt": f.get("abschnitt", ""), "frage": f.get("frage", ""),
+                        "einwand": f.get("einwand", ""), "ergebnis": ergebnis,
+                        "beobachtung": text})
+    return befunde
+
+
 def ampel_teilaussage(t: dict, einwaende: list, urteile: dict):
     """Gibt (Zeichen, Kurztext) fuer eine Teilaussage zurueck."""
     belegt = any(n.get("verifiziert") for n in t.get("nachweise", []))
@@ -828,8 +969,13 @@ def kennzahlen(audit: dict) -> dict:
     nachweise += [n for e in alle_einwaende(audit) for n in e.get("nachweise", [])]
     urteile = [u.get("urteil") for u in audit.get("urteile", {}).values()]
     mass = audit.get("massnahmen", [])
+    fragen = alle_fragen(audit)
     return {"abschnitte": len(audit.get("analysen", {})),
             "einwaende": len(alle_einwaende(audit)),
+            "fragen": len(fragen),
+            "fragen_geprueft": len(vorort_befunde(audit)),
+            "nicht_gelebt": sum(1 for b in vorort_befunde(audit)
+                                if b["ergebnis"] in ("nicht bestätigt", "teilweise bestätigt")),
             "beurteilt": sum(1 for u in urteile if u),
             "zitate": len(nachweise),
             "zitate_belegt": sum(1 for n in nachweise if n.get("verifiziert")),
@@ -926,6 +1072,17 @@ def bericht_markdown(audit: dict) -> str:
                       f"Ursachenhypothese · {m.get('ursache_hypothese', '')}  ",
                       f"Sofortmassnahme · {m.get('sofortmassnahme', '')}  ",
                       f"Wirksamkeitsnachweis · {m.get('wirksamkeitsnachweis', '')}", ""]
+    z += ["## Prüfung vor Ort"]
+    befunde = vorort_befunde(audit)
+    if not befunde:
+        z.append("Keine Beobachtungen vor Ort erfasst. Die Aussagen stützen sich auf die "
+                 "eingereichten Unterlagen.")
+    else:
+        z += ["", "| Abschnitt | Frage | Beobachtung | Ergebnis |", "| --- | --- | --- | --- |"]
+        for bef in befunde:
+            z.append(f"| {bef['abschnitt']} | {bef['frage']} | "
+                     f"{bef['beobachtung'] or 'keine Notiz'} | {bef['ergebnis']} |")
+        z.append("")
     z += ["## Ausgeräumte Zweifel (Nachweis der Prüftiefe)"]
     z += [f"- {i}: {g}" for i, g in b["ausgeraeumt"]] or ["Keine."]
     z += ["", "---", "", f"Erstellt mit {APP_NAME}, einem dialektischen Prüfverfahren. Zwei getrennte "
@@ -1298,6 +1455,67 @@ def abweichungen_sortiert(audit: dict):
 # ---------------------------------------------------------------------------
 # Word-Bericht nach dem Schema eines Auditkurzberichts
 # ---------------------------------------------------------------------------
+def leitfaden_docx(audit: dict) -> bytes:
+    """Gespraechsleitfaden fuer den Termin vor Ort als Word-Datei mit Platz fuer Notizen."""
+    from docx import Document as NeuesDok
+    from docx.shared import Pt
+
+    d = NeuesDok()
+    d.styles["Normal"].font.name = "Calibri"
+    d.styles["Normal"].font.size = Pt(10.5)
+
+    def absatz(text="", fett=False, kursiv=False, groesse=None):
+        p = d.add_paragraph()
+        lauf = p.add_run(str(text))
+        lauf.bold = fett
+        lauf.italic = kursiv
+        if groesse:
+            lauf.font.size = Pt(groesse)
+        return p
+
+    absatz("Gesprächsleitfaden für das Audit vor Ort", groesse=18, fett=True)
+    absatz(f"{audit.get('titel', '')} · {audit.get('norm', '')}", groesse=12, fett=True)
+    absatz(f"Prozess {audit.get('prozess', '')} · Termin {audit.get('termin', '')} · "
+           f"Auditor {audit.get('auditor', '')}")
+    absatz()
+    absatz("Dieser Leitfaden ist ein Entwurf aus der Dokumentenprüfung. Die Fragen zeigen, wo "
+           "die Unterlagen offen lassen, ob die Vorgabe auch gelebt wird. Was Sie vor Ort sehen "
+           "und hören, entscheidet der Auditor, nicht das System.", kursiv=True)
+
+    for nr in sorted(audit.get("leitfaden", {})):
+        block = audit["leitfaden"][nr]
+        d.add_page_break()
+        absatz(f"Normabschnitt {nr} {block.get('titel', '')}", groesse=14, fett=True)
+        for f in block.get("fragen", []):
+            absatz()
+            absatz(f"{f.get('id', '')} · {f.get('thema', '')}", fett=True)
+            absatz(f.get("frage", ""))
+            for n in f.get("nachfragen", []) or []:
+                d.add_paragraph(str(n), style="List Bullet")
+            tab = d.add_table(rows=0, cols=2)
+            tab.style = "Table Grid"
+            zeilen = [("Wen fragen", f.get("wen_fragen", "")),
+                      ("Stichprobe", f.get("stichprobe", "")),
+                      ("Worauf achten", f.get("beobachten", "")),
+                      ("Gelebt, wenn", f.get("gelebt_wenn", "")),
+                      ("Nur auf dem Papier, wenn", f.get("papier_wenn", "")),
+                      ("Gefährdung, wenn nicht gelebt", f.get("gefaehrdung", "")),
+                      ("Beobachtung vor Ort", beobachtung(audit, f.get("id", "")).get("text", "")),
+                      ("Ergebnis", beobachtung(audit, f.get("id", "")).get("ergebnis", ""))]
+            for name, wert in zeilen:
+                r = tab.add_row().cells
+                r[0].text = str(name)
+                for p in r[0].paragraphs:
+                    for lauf in p.runs:
+                        lauf.bold = True
+                r[1].text = str(wert or "")
+            d.add_paragraph()
+
+    puffer = io.BytesIO()
+    d.save(puffer)
+    return puffer.getvalue()
+
+
 def bericht_docx(audit: dict) -> bytes:
     from docx import Document as NeuesDok
     from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -1458,6 +1676,32 @@ def bericht_docx(audit: dict) -> bytes:
              ("Zur Prüfung vor Ort offen", k["offen"]),
              ("Zitate in der Quelle wiedergefunden",
               f"{k['zitate_belegt']} von {k['zitate']}")])
+    d.add_heading("5.1.4  Prüfung vor Ort", level=3)
+    befunde = vorort_befunde(audit)
+    if not befunde:
+        absatz("Es wurden keine Beobachtungen vor Ort erfasst. Die Aussagen dieses Berichts "
+               "stützen sich damit ausschliesslich auf die eingereichten Unterlagen.",
+               kursiv=True)
+    else:
+        absatz(f"Aus der Dokumentenprüfung wurden {k['fragen']} Fragen für den Termin vor Ort "
+               f"abgeleitet. Der Auditor hat {k['fragen_geprueft']} davon im Gespräch, durch "
+               "Augenschein und anhand von Stichproben geprüft. Die folgenden Beobachtungen "
+               "sind objektive Nachweise im Sinne von ISO 19011.")
+        tv = d.add_table(rows=1, cols=4)
+        tv.style = "Table Grid"
+        kopfzeile = tv.rows[0].cells
+        for i, name in enumerate(["Abschnitt", "Frage", "Beobachtung", "Ergebnis"]):
+            kopfzeile[i].text = name
+            for p in kopfzeile[i].paragraphs:
+                for lauf in p.runs:
+                    lauf.bold = True
+        for b in befunde:
+            r = tv.add_row().cells
+            r[0].text = str(b["abschnitt"])
+            r[1].text = str(b["frage"])
+            r[2].text = str(b["beobachtung"]) or "keine Notiz"
+            r[3].text = str(b["ergebnis"])
+        d.add_paragraph()
     d.add_heading("5.2  Eröffnungs- und Abschlussgespräch", level=2)
     feldtext("gespraeche")
 
@@ -1720,6 +1964,8 @@ elif bereich == "Einzelaudit":
         schritte = [("Vorbereitung", "Plan", bool(audit.get("kriterien"))),
                     ("Nachweise gesammelt", "Do", bool(quellen_sammeln(audit))),
                     ("Prüfung gelaufen", "Check", bool(audit.get("analysen"))),
+                    ("Vor Ort geprüft", "Do",
+                     k["fragen"] > 0 and k["fragen_geprueft"] == k["fragen"]),
                     ("Urteile vollständig", "Check",
                      k["einwaende"] > 0 and k["beurteilt"] == k["einwaende"]),
                     ("Bericht erstellt", "Check", bool(audit.get("feststellungen"))),
@@ -1733,9 +1979,9 @@ elif bereich == "Einzelaudit":
             f"{'✓' if fertig else '○'} {name} · *{phase}*"
             for name, phase, fertig in schritte))
 
-    t1, t2, t3, t4, t5, t6 = st.tabs(
-        ["1 Vorbereitung (Plan)", "2 Durchführung (Do)", "3 Prüfung (Check)",
-         "4 Urteil (Check)", "5 Bericht (Check)", "6 Massnahmen (Act)"])
+    t1, t2, t3, t4, t5, t6, t7 = st.tabs(
+        ["1 Vorbereitung (Plan)", "2 Nachweise (Do)", "3 Prüfung (Check)",
+         "4 Vor Ort (Do)", "5 Urteil (Check)", "6 Bericht (Check)", "7 Massnahmen (Act)"])
 
     # ---------------- 1 Vorbereitung (Plan)
     with t1:
@@ -1840,7 +2086,7 @@ elif bereich == "Einzelaudit":
             st.download_button("Auditplan mit Checkliste herunterladen", "\n".join(zeilen),
                                file_name=f"auditplan_{audit['id']}.md")
 
-    # ---------------- 2 Durchfuehrung (Do)
+    # ---------------- 2 Nachweise (Do)
     with t2:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
@@ -1941,6 +2187,9 @@ elif bereich == "Einzelaudit":
                 s2.metric("Gefundene Zweifel", k["einwaende"])
                 s3.metric("Zitate belegt", f"{k['zitate_belegt']} / {k['zitate']}")
                 s4.metric("Noch zu beurteilen", k["einwaende"] - k["beurteilt"])
+                st.caption("Diese Prüfung beruht allein auf Unterlagen. Im Reiter Vor Ort mache "
+                           "ich aus jedem Zweifel eine Frage für das Gespräch, damit Sie prüfen "
+                           "können, ob der Prozess auch gelebt wird.")
                 if k["zitate"] and k["zitate_belegt"] < k["zitate"]:
                     st.warning(f"{k['zitate'] - k['zitate_belegt']} Zitate wurden in Ihren "
                                "Unterlagen nicht wiedergefunden. Diese Nachweise sind nicht "
@@ -2084,8 +2333,107 @@ elif bereich == "Einzelaudit":
                     with st.expander("Rohausgabe"):
                         st.code(p.get("ausgabe", ""), language="json")
 
-    # ---------------- 4 Urteil (Check)
+    # ---------------- 4 Vor Ort (Do)
     with t4:
+        hilfe_l, hilfe_r = st.columns([5, 1])
+        with hilfe_r:
+            audix_hilfe("vorort")
+        st.markdown("**Vom Papier zur gelebten Praxis**")
+        st.caption("Ein Dokument beweist nur, dass etwas beschrieben ist. Hier übersetze ich die "
+                   "Zweifel aus der Prüfung in Fragen für das Gespräch, in eine Stichprobe und in "
+                   "Merkmale, an denen Sie erkennen, ob der Prozess tatsächlich gelebt wird. "
+                   "Das Hinschauen bleibt Ihre Aufgabe, ich bereite es nur vor.")
+        if not audit.get("analysen"):
+            st.info("Prüfen Sie zuerst im Reiter Prüfung mindestens einen Normabschnitt. "
+                    "Die Fragen entstehen aus den Zweifeln dieser Prüfung.")
+        else:
+            audit.setdefault("beobachtungen", {})
+            kz = kennzahlen(audit)
+            fehlend = [nr for nr in sorted(audit["analysen"])
+                       if nr not in audit.get("leitfaden", {})]
+            s1, s2 = st.columns([3, 2])
+            if s1.button(
+                    "Fragen für das Gespräch erzeugen" if not audit.get("leitfaden")
+                    else f"Fehlende Abschnitte ergänzen ({len(fehlend)})",
+                    type="primary", disabled=not fehlend, use_container_width=True):
+                balken = st.progress(0.0, text="Das Leitfadenteam arbeitet")
+                try:
+                    for i, nr in enumerate(fehlend, start=1):
+                        balken.progress((i - 1) / len(fehlend),
+                                        text=f"Fragen zu Abschnitt {nr}")
+                        leitfaden_erzeugen(audit, nr)
+                    balken.progress(1.0, text="Fertig")
+                    st.rerun()
+                except ModellFehler as fehler:
+                    st.error(str(fehler))
+            if audit.get("leitfaden"):
+                with s2:
+                    st.download_button(
+                        "Leitfaden als Word herunterladen", leitfaden_docx(audit),
+                        file_name=f"auditleitfaden_{audit['id']}.docx",
+                        mime="application/vnd.openxmlformats-officedocument."
+                             "wordprocessingml.document", use_container_width=True)
+                st.progress(kz["fragen_geprueft"] / max(1, kz["fragen"]),
+                            text=f"{kz['fragen_geprueft']} von {kz['fragen']} Fragen bearbeitet")
+                st.caption("Nehmen Sie den Leitfaden mit in den Termin. Was Sie dort feststellen, "
+                           "tragen Sie hier ein. Es erscheint beim passenden Zweifel im Reiter "
+                           "Urteil und im Auditbericht als objektiver Nachweis.")
+
+            for nr in sorted(audit.get("leitfaden", {})):
+                block = audit["leitfaden"][nr]
+                fragen = block.get("fragen", [])
+                bearbeitet = sum(1 for f in fragen
+                                 if beobachtung(audit, f["id"]).get("text", "").strip()
+                                 or beobachtung(audit, f["id"]).get("ergebnis",
+                                                                    VORORT_ERGEBNIS[0])
+                                 != VORORT_ERGEBNIS[0])
+                with st.expander(f"{nr} {block.get('titel', '')} · {len(fragen)} Fragen · "
+                                 f"{bearbeitet} bearbeitet", expanded=False):
+                    if st.button(f"Fragen zu {nr} neu erzeugen", key=f"lfneu_{nr}"):
+                        del audit["leitfaden"][nr]
+                        st.rerun()
+                    if not fragen:
+                        st.warning("Zu diesem Abschnitt kam keine verwertbare Antwort zurück. "
+                                   "Erzeugen Sie die Fragen bitte erneut.")
+                    for f in fragen:
+                        fid = f["id"]
+                        with st.container(border=True):
+                            st.markdown(f"**{f.get('frage', '')}**")
+                            kopf = [f"Thema · {f.get('thema', '')}" if f.get("thema") else "",
+                                    f"Gesprächspartner · {f.get('wen_fragen', '')}"
+                                    if f.get("wen_fragen") else "",
+                                    f"geht auf Zweifel {f.get('einwand')} zurück"
+                                    if f.get("einwand") else ""]
+                            st.caption(" · ".join(x for x in kopf if x))
+                            for n in f.get("nachfragen", []) or []:
+                                st.markdown(f"- {n}")
+                            if f.get("stichprobe"):
+                                st.markdown(f"**Stichprobe** · {f['stichprobe']}")
+                            if f.get("beobachten"):
+                                st.markdown(f"**Worauf achten** · {f['beobachten']}")
+                            links, rechts = st.columns(2)
+                            links.success(f"Gelebt, wenn · {f.get('gelebt_wenn', '')}")
+                            rechts.warning(f"Nur auf dem Papier, wenn · "
+                                           f"{f.get('papier_wenn', '')}")
+                            if f.get("gefaehrdung"):
+                                st.error(f"Gefährdung, wenn das nicht gelebt wird · "
+                                         f"{f['gefaehrdung']}")
+                            alt = beobachtung(audit, fid)
+                            text = st.text_area(
+                                "Was Sie vor Ort festgestellt haben",
+                                value=alt.get("text", ""), key=f"vo_t_{fid}", height=80,
+                                placeholder="Wer hat was gesagt, was haben Sie gesehen, "
+                                            "welche Stichprobe haben Sie gezogen")
+                            ergebnis = st.radio(
+                                "Ergebnis", VORORT_ERGEBNIS, horizontal=True, key=f"vo_e_{fid}",
+                                index=VORORT_ERGEBNIS.index(alt["ergebnis"])
+                                if alt.get("ergebnis") in VORORT_ERGEBNIS else 0)
+                            audit["beobachtungen"][fid] = {"text": text, "ergebnis": ergebnis,
+                                                           "abschnitt": nr,
+                                                           "einwand": f.get("einwand", "")}
+
+    # ---------------- 5 Urteil (Check)
+    with t5:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("urteil")
@@ -2132,6 +2480,15 @@ elif bereich == "Einzelaudit":
                     if isinstance(r, dict):
                         st.caption(f"Prognose externes Audit · {r.get('klassifizierung', '')} · "
                                    f"{r.get('konsequenz', '')}")
+                    for frage, beob in beobachtung_zu_einwand(audit, eid):
+                        if not (beob.get("text", "").strip()
+                                or beob.get("ergebnis", VORORT_ERGEBNIS[0])
+                                != VORORT_ERGEBNIS[0]):
+                            continue
+                        with st.container(border=True):
+                            st.markdown(f"**Vor Ort geprüft · {beob.get('ergebnis', '')}**")
+                            st.caption(frage.get("frage", ""))
+                            st.write(beob.get("text", "") or "Keine Notiz erfasst.")
                     idx = URTEILE.index(alt["urteil"]) if alt.get("urteil") in URTEILE else None
                     urteil = st.radio("Ihr Urteil", URTEILE, key=f"u_{eid}", index=idx,
                                       horizontal=True)
@@ -2152,7 +2509,11 @@ elif bereich == "Einzelaudit":
                         MODEL_PRO, BERICHT_SYSTEM,
                         f"Auditkriterien {audit['norm']}, Abschnitte "
                         f"{', '.join(audit['kriterien'])}\n\nEntscheidungen des Auditors\n"
-                        f"{json.dumps(relevant, ensure_ascii=False)}", audit, "bericht")
+                        f"{json.dumps(relevant, ensure_ascii=False)}\n\n"
+                        "Beobachtungen des Auditors vor Ort. Sie sind objektive Nachweise aus "
+                        "Gespräch und Augenschein und wiegen schwerer als jede Unterlage.\n"
+                        f"{json.dumps(vorort_befunde(audit), ensure_ascii=False)}",
+                        audit, "bericht")
                     fs = audit["feststellungen"].get("feststellungen", [])
                     balken.progress(0.5, text="Massnahmenteam leitet Verbesserungen ab")
                     if fs:
@@ -2185,8 +2546,8 @@ elif bereich == "Einzelaudit":
                 except ModellFehler as f:
                     st.error(str(f))
 
-    # ---------------- 5 Bericht (Check)
-    with t5:
+    # ---------------- 6 Bericht (Check)
+    with t6:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("bericht")
@@ -2298,8 +2659,8 @@ elif bereich == "Einzelaudit":
             with st.expander("Kurzfassung ansehen"):
                 st.markdown(bericht_markdown(audit))
 
-    # ---------------- 6 Massnahmen (Act)
-    with t6:
+    # ---------------- 7 Massnahmen (Act)
+    with t7:
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("massnahmen")
