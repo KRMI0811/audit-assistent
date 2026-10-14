@@ -496,6 +496,24 @@ Schema
 {"hauptaussage": "...", "teilaussagen": [{"id": "T1", "pruefpunkt": "...", "aussage": "...",
  "argument": "...", "nachweise": [{"dokument": "...", "zitat": "..."}], "annahmen": ["..."]}]}"""
 
+PRO2_SYSTEM = """Du bist das ZWEITE KONSTRUKTIONSTEAM eines internen Audits.
+Du erhältst dieselben Nachweise und die Erstfassung des Konformitätsnachweises.
+Deine Aufgabe ist nicht, sie zu loben, sondern sie unabhängig noch einmal zu lesen.
+Regeln
+1. Prüfe jeden Prüfpunkt des Auditkriteriums. Fehlt dazu eine Teilaussage, ergänze sie.
+2. Trägt ein Nachweis die Aussage inhaltlich nicht, schreibe die Aussage so um, wie die
+   Nachweise es tatsächlich hergeben. Schwäche nichts ab und übertreibe nichts.
+3. Nutze ausschliesslich die bereitgestellten Nachweise und wörtliche Zitate von höchstens
+   40 Wörtern mit exaktem Quellennamen.
+4. Was nicht belegt ist, trägst du als Annahme ein.
+5. Gib die vollständige, überarbeitete Liste aller Teilaussagen zurück, nicht nur die Änderungen.
+6. Nenne getrennt die Stellen, an denen die Nachweislage mehr als eine Lesart zulässt, und
+   beschreibe beide Lesarten in je einem Satz.
+Schema
+{"hauptaussage": "...", "teilaussagen": [{"id": "T1", "pruefpunkt": "...", "aussage": "...",
+ "argument": "...", "nachweise": [{"dokument": "...", "zitat": "..."}], "annahmen": ["..."]}],
+ "abweichende_lesart": ["..."]}"""
+
 CONTRA_SYSTEM = """Du bist das FALSIFIKATIONSTEAM eines internen Audits.
 Du erhältst einen Assurance Case und die Nachweise. Dein Ziel ist, ihn zu widerlegen.
 Einwandtypen
@@ -612,6 +630,10 @@ AGENT_STANDARD = {s: (n, z) for s, n, _, z, _, _ in AGENTEN}
 ZUSATZ_CONTRA = [("contra2", "Falsifikationsteam 2"), ("contra3", "Falsifikationsteam 3")]
 AGENT_STANDARD.update({s: (n, "Zweite Angriffsrichtung auf denselben Nachweis.")
                        for s, n in ZUSATZ_CONTRA})
+# Zweites Konstruktionsteam. Es baut keinen zweiten Nachweis, sondern liest den ersten
+# unabhaengig gegen und gibt ihn vollstaendig ueberarbeitet zurueck.
+ZUSATZ_PRO = ("pro2", "Konstruktionsteam 2")
+AGENT_STANDARD[ZUSATZ_PRO[0]] = (ZUSATZ_PRO[1], "Zweitlesung des Konformitätsnachweises.")
 
 # Pflichtbesetzung. Ohne diese beiden Rollen gibt es kein dialektisches Verfahren,
 # sondern nur eine Meinung. Sie sind daher nicht abwaehlbar.
@@ -633,6 +655,11 @@ MUSTERROLLEN = {
                                     "mit Vorgabe, Aufzeichnung und Wirksamkeitsbeleg."),
         ("Am Einzelfall", "Du belegst jede Aussage am konkreten Einzelfall und verweist auf "
                           "Datum, Vorgang und Dokument, nie auf allgemeine Regelungen allein.")],
+    "pro2": [
+        ("Vollständigkeit", "Du achtest vor allem darauf, dass zu jedem Prüfpunkt der Norm eine "
+                            "Aussage vorliegt, und ergänzt, was das erste Team übergangen hat."),
+        ("Wortgetreu", "Du prüfst für jede Aussage, ob das Zitat sie wirklich trägt, und "
+                       "schreibst sie andernfalls auf das zurück, was der Nachweis hergibt.")],
     "contra": [
         ("Schwerpunkt Dokumentenlage", "Du prüfst vor allem die Belastbarkeit der Unterlagen. "
                                        "Veraltete Stände, fehlende Freigaben, widersprüchliche "
@@ -692,9 +719,15 @@ def besetzung(audit: dict) -> dict:
     """Welche Teams in der Pruefung laufen. Die beiden Pflichtteams sind immer dabei."""
     gesetzt = audit.setdefault("besetzung", {})
     gesetzt.setdefault("falsifikationsteams", 1)
+    gesetzt.setdefault("konstruktionsteams", 1)
     gesetzt.setdefault("erwiderung", True)
     gesetzt["falsifikationsteams"] = min(3, max(1, int(gesetzt["falsifikationsteams"])))
+    gesetzt["konstruktionsteams"] = min(2, max(1, int(gesetzt["konstruktionsteams"])))
     return gesetzt
+
+
+def zweitlesung_an(audit: dict) -> bool:
+    return besetzung(audit)["konstruktionsteams"] > 1
 
 
 def contra_schluessel(audit: dict) -> list:
@@ -723,7 +756,8 @@ def bildpfad(name: str):
 
 # Teams, die sich eine Figur teilen. Wer erwidert, baut auch, und jedes zusaetzliche
 # Falsifikationsteam ist dieselbe Rolle. So genuegen zwei eigene Figuren.
-FIGUR_ERSATZ = {"erwiderung": "pro", "contra2": "contra", "contra3": "contra"}
+FIGUR_ERSATZ = {"erwiderung": "pro", "pro2": "pro", "contra2": "contra",
+                "contra3": "contra"}
 
 
 def figurpfad(schluessel: str):
@@ -1129,6 +1163,21 @@ def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True, melden=
                     f"Auditkriterium\n{kriterium}\n\nNachweise\n{material}", audit, "pro")
     for t in fall.get("teilaussagen", []):
         zitate_pruefen(t.get("nachweise"), quellen)
+    erstfassung, lesarten = None, []
+    if zweitlesung_an(audit):
+        if melden:
+            melden(f"{agent_name(audit, 'pro2')} liest Abschnitt {nr} gegen")
+        zweit = llm_json(MODEL_PRO, PRO2_SYSTEM,
+                         f"Auditkriterium\n{kriterium}\n\nErstfassung\n"
+                         f"{json.dumps(fall, ensure_ascii=False)}\n\nNachweise\n{material}",
+                         audit, "pro2")
+        if zweit.get("teilaussagen"):
+            for t in zweit["teilaussagen"]:
+                zitate_pruefen(t.get("nachweise"), quellen)
+            erstfassung = fall
+            lesarten = zweit.get("abweichende_lesart") or []
+            fall = {"hauptaussage": zweit.get("hauptaussage", fall.get("hauptaussage", "")),
+                    "teilaussagen": zweit["teilaussagen"]}
     praefix = nr.replace(".", "_")
     einw = {"einwaende": []}
     for i, schluessel in enumerate(contra_schluessel(audit)):
@@ -1161,6 +1210,7 @@ def analyse_durchfuehren(audit, katalog, abschnitt, mit_erwiderung=True, melden=
         "titel": abschnitt["titel"], "anforderung": abschnitt["anforderung"],
         "pruefpunkte": abschnitt.get("pruefpunkte", []), "kriterium": kriterium,
         "fall": fall, "einwaende": einw, "erwiderungen": erw,
+        "erstfassung": erstfassung, "abweichende_lesart": lesarten,
         "modelle": {"pro": MODEL_PRO, "contra": MODEL_CONTRA},
         "teams": [agent_name(audit, s) for s in contra_schluessel(audit)],
         "zeit": datetime.now().isoformat(timespec="seconds")}
@@ -1402,8 +1452,16 @@ def besetzung_feld(audit: dict):
         g["erwiderung"] = s2.checkbox(
             "Das bauende Team darf erwidern", value=bool(g["erwiderung"]),
             key=f"bes_erwiderung_{audit['id']}")
+        g["konstruktionsteams"] = 2 if st.checkbox(
+            "Zweitlesung durch ein zweites Konstruktionsteam",
+            value=g["konstruktionsteams"] > 1, key=f"bes_zweit_{audit['id']}") else 1
+        st.caption("Die Zweitlesung baut keinen zweiten Nachweis, sondern liest den ersten "
+                   "unabhängig gegen, ergänzt übersehene Prüfpunkte und korrigiert Aussagen, "
+                   "die der Nachweis nicht trägt. Angegriffen wird danach die überarbeitete "
+                   "Fassung. Beide Fassungen bleiben einsehbar.")
         abschnitte_anzahl = max(1, len(audit.get("kriterien") or []))
-        je_abschnitt = 1 + g["falsifikationsteams"] + (1 if g["erwiderung"] else 0)
+        je_abschnitt = (g["konstruktionsteams"] + g["falsifikationsteams"]
+                        + (1 if g["erwiderung"] else 0))
         st.caption(f"Das ergibt {je_abschnitt * abschnitte_anzahl} Modellaufrufe bei "
                    f"{abschnitte_anzahl} gewählten Normabschnitten. Rechnen Sie mit etwa einer "
                    "Minute je Aufruf.")
@@ -1457,11 +1515,16 @@ def team_feld(audit: dict, schluessel: str, standardname: str, zweck: str, promp
 
 
 def teamliste(audit: dict) -> list:
-    """Alle Teams in Arbeitsreihenfolge, zugeschaltete Falsifikationsteams eingereiht."""
+    """Alle Teams in Arbeitsreihenfolge, zugeschaltete Teams eingereiht."""
     aktiv = contra_schluessel(audit)
     liste = []
     for schluessel, standardname, phase, zweck, prompt, modell in AGENTEN:
         liste.append((schluessel, standardname, phase, zweck, prompt, modell))
+        if schluessel == "pro" and zweitlesung_an(audit):
+            liste.append((ZUSATZ_PRO[0], ZUSATZ_PRO[1], phase,
+                          "Liest den Nachweis des ersten Teams unabhängig gegen, ergänzt "
+                          "übersehene Prüfpunkte und korrigiert Aussagen, die der Nachweis "
+                          "nicht trägt.", PRO2_SYSTEM, modell))
         if schluessel == "contra":
             for zusatz, zusatzname in ZUSATZ_CONTRA:
                 if zusatz in aktiv:
@@ -2398,6 +2461,19 @@ with st.sidebar:
         st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
         if not API_KEY:
             st.error("Kein API-Schlüssel in den Secrets hinterlegt.")
+        # Zeigt, welche eigenen Figuren die App tatsächlich sieht. Das erspart das
+        # Raten, wenn hochgeladene Bilder nicht erscheinen.
+        gefunden = [n for n in ("team_pro", "team_contra") if bildpfad(n)]
+        if gefunden:
+            st.caption("Eigene Figuren gefunden · " + ", ".join(gefunden))
+        elif not BILDER.exists():
+            st.caption(f"Kein Ordner bilder gefunden. Erwartet wird {BILDER}, also ein Ordner "
+                       "namens bilder direkt neben app.py.")
+        else:
+            inhalt = sorted(p.name for p in BILDER.iterdir())
+            st.caption("Der Ordner bilder enthält · " + (", ".join(inhalt) or "nichts") +
+                       ". Gesucht werden team_pro.png und team_contra.png, genau so "
+                       "geschrieben.")
 
 # ================================================================ Auditprogramm
 if bereich == "Auditprogramm":
@@ -2570,6 +2646,8 @@ elif bereich == "Einzelaudit":
         if not audit.get("kriterien"):
             team_zeile(audit, "vorbereitung", "wählt gleich die Normabschnitte aus")
         team_zeile(audit, "pro")
+        if zweitlesung_an(audit):
+            team_zeile(audit, "pro2")
         for schluessel in contra_schluessel(audit):
             team_zeile(audit, schluessel)
         if besetzung(audit)["erwiderung"]:
@@ -2646,6 +2724,8 @@ elif bereich == "Einzelaudit":
         besetzung_feld(audit)
         with st.expander("Wer in diesem Lauf arbeitet"):
             team_zeile(audit, "pro")
+            if zweitlesung_an(audit):
+                team_zeile(audit, "pro2")
             for schluessel in contra_schluessel(audit):
                 team_zeile(audit, schluessel)
             if besetzung(audit)["erwiderung"]:
@@ -2664,8 +2744,9 @@ elif bereich == "Einzelaudit":
                 balken = st.progress(0.0, text="Vorbereitung")
                 protokoll = st.empty()
                 try:
-                    je_abschnitt = 1 + len(contra_schluessel(audit)) + (
-                        1 if besetzung(audit)["erwiderung"] else 0)
+                    je_abschnitt = (besetzung(audit)["konstruktionsteams"]
+                                    + len(contra_schluessel(audit))
+                                    + (1 if besetzung(audit)["erwiderung"] else 0))
                     schritte_gesamt = max(
                         1, len(audit.get("kriterien") or [1]) * je_abschnitt + 1)
                     zaehler = {"n": 0}
@@ -2730,6 +2811,25 @@ elif bereich == "Einzelaudit":
                     st.markdown(f"**Gesamtbefund des Systems** · {zeichen} {lage}")
                     st.caption("Befund des Systems auf Basis der Unterlagen. Die Feststellung "
                                "trifft der Auditor unter Check bei der Aufgabe Urteil.")
+                    if erg.get("erstfassung"):
+                        with st.expander("Zweitlesung des Konformitätsnachweises"):
+                            st.caption("Ein zweites Konstruktionsteam hat den Nachweis "
+                                       "unabhängig gegengelesen. Angegriffen wurde die "
+                                       "überarbeitete Fassung.")
+                            lesarten = erg.get("abweichende_lesart") or []
+                            if lesarten:
+                                st.markdown("**Wo die Nachweise mehr als eine Lesart zulassen**")
+                                for eintrag in lesarten:
+                                    st.markdown(f"- {eintrag}")
+                            else:
+                                st.caption("Keine abweichende Lesart gemeldet.")
+                            erste = erg["erstfassung"].get("teilaussagen", [])
+                            st.markdown(f"**Erstfassung** · {len(erste)} Teilaussagen, "
+                                        f"überarbeitete Fassung · "
+                                        f"{len(erg.get('fall', {}).get('teilaussagen', []))}")
+                            for t in erste:
+                                st.markdown(f"- *{t.get('pruefpunkt', '')}* · "
+                                            f"{t.get('aussage', '')}")
                     for t in erg.get("fall", {}).get("teilaussagen", []):
                         z, kurz = ampel_teilaussage(t, einwaende_abschnitt, urteile)
                         zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
