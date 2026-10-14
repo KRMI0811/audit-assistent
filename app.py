@@ -10,6 +10,7 @@ Act    Korrekturmassnahmen und Nachverfolgung der Wirksamkeit
 Die Agenten bereiten vor und pruefen. Ueber jede Feststellung entscheidet der Auditor.
 """
 
+import base64
 import io
 import json
 import re
@@ -41,6 +42,10 @@ MAX_ZEICHEN = int(st.secrets.get("MAX_ZEICHEN", 20000))
 NORMEN_ORDNER = Path(__file__).parent / "normen"
 LOGO = Path(__file__).parent / "logo.png"
 AVATAR = Path(__file__).parent / "audix.png"
+# Ordner für eigene Figuren der Teams. Liegt dort eine Datei mit passendem Namen,
+# etwa team_pro.png oder tiefe_standard.png, wird sie statt der gezeichneten
+# Ersatzgrafik verwendet. Fehlt der Ordner, läuft alles unverändert weiter.
+BILDER = Path(__file__).parent / "bilder"
 
 st.set_page_config(page_title=APP_NAME, page_icon=str(AVATAR) if AVATAR.exists() else None,
                    layout="wide")
@@ -698,6 +703,183 @@ def contra_schluessel(audit: dict) -> list:
     return ["contra"] + [s for s, _ in ZUSATZ_CONTRA[:anzahl - 1]]
 
 
+# ---------------------------------------------------------------------------
+# Kleine Grafiken. Sie stecken als SVG im Programm, es sind keine Bilddateien
+# noetig. bild() macht daraus ein Bild, das sich in Markdown einbetten laesst.
+# ---------------------------------------------------------------------------
+def bild(svg: str, breite: int = 160) -> str:
+    daten = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f'<img src="data:image/svg+xml;base64,{daten}" width="{breite}">'
+
+
+def bildpfad(name: str):
+    """Sucht eine eigene Bilddatei im Ordner bilder. Fehlt sie, wird gezeichnet."""
+    for endung in (".png", ".webp", ".jpg"):
+        pfad = BILDER / f"{name}{endung}"
+        if pfad.exists():
+            return pfad
+    return None
+
+
+# Teams, die sich eine Figur teilen. Wer erwidert, baut auch, und jedes zusaetzliche
+# Falsifikationsteam ist dieselbe Rolle. So genuegen zwei eigene Figuren.
+FIGUR_ERSATZ = {"erwiderung": "pro", "contra2": "contra", "contra3": "contra"}
+
+
+def figurpfad(schluessel: str):
+    """Figur eines Teams. Fehlt sie, wird die Figur der verwandten Rolle genommen."""
+    pfad = bildpfad(f"team_{schluessel}")
+    if pfad is None and schluessel in FIGUR_ERSATZ:
+        pfad = bildpfad(f"team_{FIGUR_ERSATZ[schluessel]}")
+    return pfad
+
+
+@st.cache_data(show_spinner=False)
+def figur_eingebettet(pfad: str, kante: int = 160) -> str:
+    """Verkleinert eine Figur einmalig und gibt sie als eingebettete Bilddaten zurueck."""
+    from PIL import Image as PilBild
+    with PilBild.open(pfad) as datei:
+        klein = datei.convert("RGBA")
+        klein.thumbnail((kante, kante))
+        puffer = io.BytesIO()
+        klein.save(puffer, format="PNG")
+    return base64.b64encode(puffer.getvalue()).decode("ascii")
+
+
+def _tiefe_svg(angriffe: int, erwiderung: bool) -> str:
+    """Schema der Prueftiefe. Links baut ein Team, rechts greifen ein oder zwei an.
+
+    Liegen eigene Figuren für das bauende und das angreifende Team im Ordner bilder,
+    werden sie statt der Kreise eingesetzt. Zwei Dateien genügen also für alle drei
+    Prüftiefen.
+    """
+    figuren = {}
+    for seite, schluessel in (("links", "pro"), ("rechts", "contra")):
+        pfad = bildpfad(f"team_{schluessel}")
+        if pfad:
+            try:
+                figuren[seite] = figur_eingebettet(str(pfad))
+            except Exception:
+                pass
+    t = ['<svg xmlns="http://www.w3.org/2000/svg" '
+         'xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 124">',
+         '<defs><marker id="s" markerWidth="8" markerHeight="8" refX="7" refY="4" '
+         'orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6b7280"/></marker>'
+         '<marker id="b" markerWidth="8" markerHeight="8" refX="7" refY="4" '
+         'orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#3b7ddd"/></marker></defs>']
+    links_y, rechts = (50, [50]) if angriffe == 1 else (50, [24, 76])
+
+    def kreis(seite, cx, cy, farbe, glyphe):
+        daten = figuren.get(seite)
+        if daten:
+            t.append(f'<image xlink:href="data:image/png;base64,{daten}" x="{cx - 24}" '
+                     f'y="{cy - 24}" width="48" height="48"/>')
+            return
+        t.append(f'<circle cx="{cx}" cy="{cy}" r="20" fill="{farbe}"/>')
+        t.append(glyphe)
+
+    kreis("links", 38, links_y, "#3b7ddd",
+          f'<path d="M28 {links_y} H48 M38 {links_y - 10} V{links_y + 10}" stroke="#fff" '
+          'stroke-width="3.6" stroke-linecap="round"/>')
+    for y in rechts:
+        kreis("rechts", 162, y, "#cf5a52",
+              f'<path d="M154 {y - 8} L170 {y + 8} M170 {y - 8} L154 {y + 8}" stroke="#fff" '
+              'stroke-width="3.6" stroke-linecap="round"/>')
+    if angriffe == 1:
+        t.append(f'<path d="M138 {40 if erwiderung else 50} H66" stroke="#6b7280" '
+                 'stroke-width="2.4" marker-end="url(#s)"/>')
+        if erwiderung:
+            t.append('<path d="M62 62 H134" stroke="#3b7ddd" stroke-width="2.4" '
+                     'stroke-dasharray="6 4" marker-end="url(#b)"/>')
+    else:
+        t.append('<path d="M140 30 L66 44" stroke="#6b7280" stroke-width="2.4" '
+                 'marker-end="url(#s)"/>')
+        t.append('<path d="M140 70 L66 56" stroke="#6b7280" stroke-width="2.4" '
+                 'marker-end="url(#s)"/>')
+        if erwiderung:
+            t.append('<path d="M62 50 H130" stroke="#3b7ddd" stroke-width="2.4" '
+                     'stroke-dasharray="6 4" marker-end="url(#b)"/>')
+    beschriftung = "greift an" if angriffe == 1 else "greifen an"
+    unterkante = max(rechts + [links_y]) + 38
+    t.append(f'<text x="38" y="{unterkante}" font-size="13" fill="#6b7280" '
+             'text-anchor="middle" font-family="sans-serif">baut</text>')
+    t.append(f'<text x="162" y="{unterkante}" font-size="13" fill="#6b7280" '
+             f'text-anchor="middle" font-family="sans-serif">{beschriftung}</text>')
+    return "".join(t) + "</svg>"
+
+
+def _symbol(farbe: str, inhalt: str) -> str:
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">'
+            f'<circle cx="22" cy="22" r="21" fill="{farbe}"/>{inhalt}</svg>')
+
+
+_KREUZ = ('<path d="M14 14 L30 30 M30 14 L14 30" stroke="#fff" stroke-width="3.4" '
+          'stroke-linecap="round"/>')
+_BLATT = ('<rect x="13" y="11" width="18" height="22" rx="2.5" fill="none" stroke="#fff" '
+          'stroke-width="2.4"/><path d="M17 18 H27 M17 23 H27 M17 28 H23" stroke="#fff" '
+          'stroke-width="2" stroke-linecap="round"/>')
+
+TEAM_BILD = {
+    "vorbereitung": _symbol("#5b7fa6", _BLATT),
+    "pro": _symbol("#3b7ddd", '<path d="M13 22 H31 M22 13 V31" stroke="#fff" stroke-width="3.6" '
+                              'stroke-linecap="round"/>'),
+    "contra": _symbol("#cf5a52", _KREUZ),
+    "contra2": _symbol("#d9827b", _KREUZ),
+    "contra3": _symbol("#e3a19b", _KREUZ),
+    "erwiderung": _symbol("#3b7ddd",
+                          '<rect x="9" y="12" width="17" height="12" rx="3.5" fill="none" '
+                          'stroke="#fff" stroke-width="2.2"/>'
+                          '<rect x="19" y="21" width="17" height="12" rx="3.5" fill="#3b7ddd" '
+                          'stroke="#fff" stroke-width="2.2"/>'),
+    "vorort": _symbol("#4a9d5f",
+                      '<circle cx="20" cy="19" r="8" fill="none" stroke="#fff" '
+                      'stroke-width="2.6"/><path d="M26 25 L32 31" stroke="#fff" '
+                      'stroke-width="3" stroke-linecap="round"/>'),
+    "bericht": _symbol("#d9a431", _BLATT),
+    "massnahmen": _symbol("#cf5a52",
+                          '<path d="M32 22 A10 10 0 1 1 25 12.6" fill="none" stroke="#fff" '
+                          'stroke-width="2.8" stroke-linecap="round"/>'
+                          '<path d="M24 7 L28 14 L21 15.5 z" fill="#fff"/>')}
+
+# Die drei Prüftiefen. Schluessel, Name, Zahl der Falsifikationsteams, Erwiderung,
+# was passiert, wofuer es gedacht ist.
+PRUEFTIEFEN = [
+    ("schnell", "Schnell", 1, False,
+     "Ein Team baut, ein Team greift an.",
+     "Für den ersten Überblick. Sie sehen die Zweifel ohne Gegenrede."),
+    ("standard", "Standard", 1, True,
+     "Ein Angriff, dann darf das bauende Team erwidern.",
+     "Die empfohlene Einstellung für das normale interne Audit."),
+    ("gruendlich", "Gründlich", 2, True,
+     "Zwei Teams greifen aus verschiedenen Richtungen an, dann die Erwiderung.",
+     "Für kritische Prozesse. Findet mehr, dauert länger.")]
+
+
+def team_grafik(schluessel: str, breite: int = 46):
+    pfad = figurpfad(schluessel)
+    if pfad:
+        st.image(str(pfad), width=breite)
+    else:
+        st.markdown(bild(TEAM_BILD.get(schluessel, TEAM_BILD["pro"]), breite),
+                    unsafe_allow_html=True)
+
+
+def tiefe_grafik(schluessel: str, angriffe: int, erwiderung: bool, breite: int = 170):
+    pfad = bildpfad(f"tiefe_{schluessel}")
+    if pfad:
+        st.image(str(pfad), width=breite)
+    else:
+        st.markdown(bild(_tiefe_svg(angriffe, erwiderung), breite), unsafe_allow_html=True)
+
+
+def tiefe_aktuell(audit: dict) -> str:
+    g = besetzung(audit)
+    for schluessel, _, anzahl, erw, _, _ in PRUEFTIEFEN:
+        if g["falsifikationsteams"] == anzahl and bool(g["erwiderung"]) == erw:
+            return schluessel
+    return "eigene"
+
+
 URTEILE = ["Ausgeräumt", "Bestätigt: Abweichung", "Bestätigt: Verbesserungspotenzial",
            "Offen: vor Ort prüfen"]
 TYPEN = {"widerlegend": "Nachweise sprechen dagegen",
@@ -1181,37 +1363,50 @@ def phasen_schaltflaeche(erledigt: dict) -> int:
 
 
 def besetzung_feld(audit: dict):
-    """Steuerung, wie viele und welche Teams in der Pruefung laufen."""
+    """Die drei Pruefttiefen als Karten, darunter bei Bedarf die Feineinstellung."""
     g = besetzung(audit)
-    st.markdown("**Besetzung der Prüfung**")
-    st.caption("Konstruktionsteam und Falsifikationsteam laufen immer. Ohne diese beiden gäbe es "
-               "keine Gegenrede, sondern nur eine Meinung, und genau darauf beruht das Verfahren.")
-    s1, s2 = st.columns([3, 2])
-    g["falsifikationsteams"] = s1.radio(
-        "Wie viele Falsifikationsteams greifen den Nachweis an", [1, 2, 3],
-        index=g["falsifikationsteams"] - 1, horizontal=True,
-        key=f"bes_anzahl_{audit['id']}",
-        help="Mehrere Teams greifen mit unterschiedlichen Schwerpunkten an. Das findet mehr, "
-             "dauert aber länger und erzeugt mehr Zweifel, über die Sie entscheiden müssen.")
-    g["erwiderung"] = s2.checkbox(
-        "Erwiderungsrunde des Konstruktionsteams", value=bool(g["erwiderung"]),
-        key=f"bes_erwiderung_{audit['id']}",
-        help="Das Konstruktionsteam darf auf jeden Einwand antworten. Abschalten verkürzt den "
-             "Lauf, nimmt Ihnen aber die Gegenseite vor dem Urteil.")
+    gewaehlt = tiefe_aktuell(audit)
+    st.markdown("**Wer prüft**")
+    st.caption("Ein Team baut den Nachweis, mindestens ein zweites greift ihn an. Diese beiden "
+               "sind immer dabei, denn darauf beruht das Verfahren.")
+    st.markdown(
+        "<style>.st-key-tiefe_schnell button, .st-key-tiefe_standard button, "
+        ".st-key-tiefe_gruendlich button {border-radius:0.6rem;}</style>",
+        unsafe_allow_html=True)
+    spalten = st.columns(3)
+    for spalte, (schluessel, name, anzahl, erw, was, wofuer) in zip(spalten, PRUEFTIEFEN):
+        with spalte:
+            with st.container(border=True):
+                tiefe_grafik(schluessel, anzahl, erw, 170)
+                st.markdown(f"**{name}**" + (" ✓" if schluessel == gewaehlt else ""))
+                st.caption(was)
+                st.caption(wofuer)
+                aufrufe = anzahl + 1 + (1 if erw else 0)
+                st.caption(f"{aufrufe} Modellaufrufe je Normabschnitt")
+                if st.button("Diese Tiefe wählen" if schluessel != gewaehlt else "Gewählt",
+                             key=f"tiefe_{schluessel}", use_container_width=True,
+                             type="primary" if schluessel == gewaehlt else "secondary",
+                             disabled=schluessel == gewaehlt):
+                    g["falsifikationsteams"] = anzahl
+                    g["erwiderung"] = erw
+                    st.session_state[f"bes_anzahl_{audit['id']}"] = anzahl
+                    st.session_state[f"bes_erwiderung_{audit['id']}"] = erw
+                    st.rerun()
 
-    aktive = ["pro"] + contra_schluessel(audit) + (["erwiderung"] if g["erwiderung"] else [])
-    zeilen = []
-    for schluessel in aktive:
-        marke = "fest" if schluessel in PFLICHTTEAMS else "zugeschaltet"
-        zeilen.append(f"✓ {agent_name(audit, schluessel)} · *{marke}*")
-    if not g["erwiderung"]:
-        zeilen.append("○ Erwiderung des Konstruktionsteams · *abgeschaltet*")
-    st.markdown("  \n".join(zeilen))
-    abschnitte_anzahl = max(1, len(audit.get("kriterien") or []))
-    aufrufe = len(aktive) * abschnitte_anzahl
-    st.caption(f"Dieser Lauf macht {aufrufe} Modellaufrufe, also {len(aktive)} je Normabschnitt "
-               f"bei {abschnitte_anzahl} gewählten Abschnitten. Rechnen Sie mit etwa einer "
-               "Minute je Aufruf.")
+    with st.expander("Besetzung von Hand anpassen"):
+        s1, s2 = st.columns([3, 2])
+        g["falsifikationsteams"] = s1.radio(
+            "Wie viele Teams greifen den Nachweis an", [1, 2, 3],
+            index=g["falsifikationsteams"] - 1, horizontal=True,
+            key=f"bes_anzahl_{audit['id']}")
+        g["erwiderung"] = s2.checkbox(
+            "Das bauende Team darf erwidern", value=bool(g["erwiderung"]),
+            key=f"bes_erwiderung_{audit['id']}")
+        abschnitte_anzahl = max(1, len(audit.get("kriterien") or []))
+        je_abschnitt = 1 + g["falsifikationsteams"] + (1 if g["erwiderung"] else 0)
+        st.caption(f"Das ergibt {je_abschnitt * abschnitte_anzahl} Modellaufrufe bei "
+                   f"{abschnitte_anzahl} gewählten Normabschnitten. Rechnen Sie mit etwa einer "
+                   "Minute je Aufruf.")
 
 
 def team_feld(audit: dict, schluessel: str, standardname: str, zweck: str, prompt: str,
@@ -1221,13 +1416,17 @@ def team_feld(audit: dict, schluessel: str, standardname: str, zweck: str, promp
     rollenfeld = f"ar_{audit['id']}_{schluessel}"
     if rollenfeld not in st.session_state:
         st.session_state[rollenfeld] = eintrag.get("rolle", "")
-    st.caption(zweck)
-    st.markdown(f"Arbeitet mit dem {modell}.")
+    kopf_bild, kopf_text = st.columns([1, 6], vertical_alignment="center")
+    with kopf_bild:
+        team_grafik(schluessel, 64)
+    with kopf_text:
+        st.caption(zweck)
+        st.caption(f"Arbeitet mit dem {modell}.")
 
     muster = MUSTERROLLEN.get(schluessel, [])
     if muster:
-        st.caption("Muster für das Rollenverständnis. Anklicken, dann steht der Text unten "
-                   "im Feld und lässt sich dort weiter anpassen.")
+        st.caption("Muster für den Schwerpunkt. Anklicken, dann steht der Text unten im Feld "
+                   "und lässt sich dort weiter anpassen.")
         spalten = st.columns(len(muster) + 1)
         for spalte, (titel, text) in zip(spalten, muster):
             if spalte.button(titel, key=f"mu_{audit['id']}_{schluessel}_{titel}",
@@ -1245,7 +1444,7 @@ def team_feld(audit: dict, schluessel: str, standardname: str, zweck: str, promp
                                     key=f"an_{audit['id']}_{schluessel}",
                                     placeholder=standardname)
     eintrag["rolle"] = st.text_area(
-        "Rollenverständnis", height=100, key=rollenfeld,
+        "Schwerpunkt dieses Teams", height=100, key=rollenfeld,
         placeholder="Beispiel: Du bist ein erfahrener Auditor aus der Medizintechnik und legst "
                     "besonderen Wert auf Rückverfolgbarkeit.")
     audit.setdefault("prompt_zusatz", {})[schluessel] = st.text_area(
@@ -1271,6 +1470,40 @@ def teamliste(audit: dict) -> list:
                                   "Geben Sie ihm einen eigenen Schwerpunkt, sonst findet er "
                                   "dasselbe wie das erste Team.", prompt, modell))
     return liste
+
+
+def team_daten(audit: dict, schluessel: str):
+    """Die Beschreibungsdaten eines Teams, auch der zugeschalteten."""
+    for eintrag in teamliste(audit):
+        if eintrag[0] == schluessel:
+            return eintrag
+    return (schluessel, schluessel, "", "", "", "")
+
+
+@st.dialog("Team anpassen", width="large")
+def team_fenster(audit: dict, schluessel: str):
+    _, standardname, _, zweck, prompt, modell = team_daten(audit, schluessel)
+    team_feld(audit, schluessel, standardname, zweck, prompt, modell)
+    if st.button("Fertig", type="primary", use_container_width=True):
+        st.rerun()
+
+
+def team_zeile(audit: dict, schluessel: str, zusatz: str = ""):
+    """Eine ruhige Zeile je Team. Das Anpassen passiert in einem Fenster darüber."""
+    _, standardname, _, _, _, _ = team_daten(audit, schluessel)
+    rolle = agent_rolle(audit, schluessel).strip()
+    muster = next((t for t, text in MUSTERROLLEN.get(schluessel, []) if text == rolle), "")
+    beschreibung = muster or ("eigener Schwerpunkt" if rolle else "Standardverhalten")
+    if zusatz:
+        beschreibung += f" · {zusatz}"
+    with st.container(border=True):
+        s1, s2, s3 = st.columns([1, 6, 2], vertical_alignment="center")
+        with s1:
+            team_grafik(schluessel, 46)
+        s2.markdown(f"**{agent_name(audit, schluessel)}**  \n{beschreibung}")
+        if s3.button("anpassen", key=f"tz_{audit['id']}_{schluessel}",
+                     use_container_width=True):
+            team_fenster(audit, schluessel)
 
 
 def nachweise_anzeigen(nachweise, leer_hinweis="Kein Nachweis angegeben."):
@@ -2266,14 +2499,11 @@ elif bereich == "Einzelaudit":
                     7: bool(audit.get("massnahmen"))}
         schritte = [(SCHRITT_NAME[nr], SCHRITT_PHASE[nr], erledigt[nr])
                     for nr in sorted(SCHRITT_NAME)]
+        # Nur der Balken. Welche Aufgabe erledigt ist, steht in der Aufgabenübersicht
+        # der gewählten Phase und muss hier nicht ein zweites Mal stehen.
         fertig_anzahl = sum(1 for _, _, f in schritte if f)
         st.progress(fertig_anzahl / len(schritte),
                     text=f"{fertig_anzahl} von {len(schritte)} Schritten erledigt")
-        # Eine einzige Zeile je Schritt in einem Block, damit die Liste in der
-        # Seitenleiste kompakt bleibt und nicht über die ganze Höhe läuft.
-        st.markdown("  \n".join(
-            f"{'✓' if fertig else '○'} {name} · *{phase}*"
-            for name, phase, fertig in schritte))
 
     schritt = phasen_schaltflaeche(erledigt)
 
@@ -2334,30 +2564,18 @@ elif bereich == "Einzelaudit":
                         st.markdown(f"- {n}")
         st.divider()
         st.markdown("**Auditteam zusammenstellen**")
-        st.caption("Jedes Team ist ein eigener Agent. Sie bestimmen, wie viele davon in der "
-                   "Prüfung arbeiten, und können jedem einen Namen, ein Rollenverständnis und "
-                   "eine Zusatzanweisung geben. Für das Rollenverständnis gibt es Muster zum "
-                   "Anklicken. Zwei Teams sind fest gesetzt, denn eines baut den Nachweis und "
-                   "ein zweites greift ihn an.")
-        with st.container(border=True):
-            besetzung_feld(audit)
         audit.setdefault("agenten", {})
-        aktive_contra = contra_schluessel(audit)
-        for schluessel, standardname, phase, zweck, prompt, modell in teamliste(audit):
-            if schluessel in PFLICHTTEAMS:
-                marke = "läuft immer mit"
-            elif schluessel in aktive_contra:
-                marke = "zugeschaltet"
-            elif schluessel == "erwiderung":
-                marke = ("läuft mit" if besetzung(audit)["erwiderung"] else "abgeschaltet")
-            elif schluessel == "vorbereitung":
-                marke = "nur, wenn keine Normabschnitte gewählt sind"
-            else:
-                marke = f"arbeitet in der Phase {phase}"
-            eigen = agent_name(audit, schluessel)
-            titel = standardname if eigen == standardname else f"{eigen} ({standardname})"
-            with st.expander(f"{titel} · {marke}"):
-                team_feld(audit, schluessel, standardname, zweck, prompt, modell)
+        besetzung_feld(audit)
+        st.markdown("**Das Team dieses Audits**")
+        if not audit.get("kriterien"):
+            team_zeile(audit, "vorbereitung", "wählt gleich die Normabschnitte aus")
+        team_zeile(audit, "pro")
+        for schluessel in contra_schluessel(audit):
+            team_zeile(audit, schluessel)
+        if besetzung(audit)["erwiderung"]:
+            team_zeile(audit, "erwiderung")
+        st.caption("Die übrigen Teams finden Sie dort, wo sie arbeiten, also bei Vor Ort, "
+                   "beim Bericht und bei den Massnahmen.")
 
         if audit.get("kriterien"):
             zeilen = [f"# Auditplan {audit['titel']}", "",
@@ -2425,25 +2643,18 @@ elif bereich == "Einzelaudit":
         with hilfe_r:
             audix_hilfe("pruefung")
 
-        with st.container(border=True):
-            besetzung_feld(audit)
-            with st.expander("Was die einzelnen Teams mitbringen"):
-                for schluessel in ["pro"] + contra_schluessel(audit) + ["erwiderung"]:
-                    if schluessel == "erwiderung" and not besetzung(audit)["erwiderung"]:
-                        continue
-                    st.markdown(f"**{agent_name(audit, schluessel)}**")
-                    rolle = agent_rolle(audit, schluessel).strip()
-                    st.caption(rolle or "Kein eigenes Rollenverständnis hinterlegt, das Team "
-                                         "arbeitet mit seiner Grundanweisung.")
-                zusatz = [s for s in contra_schluessel(audit) if s != "contra"
-                          and not agent_rolle(audit, s).strip()]
-                if zusatz:
-                    st.warning("Mindestens ein zugeschaltetes Falsifikationsteam hat keinen "
-                               "eigenen Schwerpunkt. Ohne eigenen Schwerpunkt findet es "
-                               "weitgehend dasselbe wie das erste Team. Setzen Sie den "
-                               "Schwerpunkt unter Plan bei der Vorbereitung.")
-                st.caption("Namen, Rollen und Zusatzanweisungen stellen Sie unter Plan "
-                           "bei der Vorbereitung ein.")
+        besetzung_feld(audit)
+        with st.expander("Wer in diesem Lauf arbeitet"):
+            team_zeile(audit, "pro")
+            for schluessel in contra_schluessel(audit):
+                team_zeile(audit, schluessel)
+            if besetzung(audit)["erwiderung"]:
+                team_zeile(audit, "erwiderung")
+            ohne_schwerpunkt = [s for s in contra_schluessel(audit)
+                                if s != "contra" and not agent_rolle(audit, s).strip()]
+            if ohne_schwerpunkt:
+                st.warning("Ein zugeschaltetes Team hat noch keinen eigenen Schwerpunkt. Ohne "
+                           "Schwerpunkt findet es weitgehend dasselbe wie das erste Team.")
 
         if not quellen_sammeln(audit):
             st.warning("Bitte zuerst unter Plan bei der Aufgabe Nachweise Unterlagen erfassen.")
@@ -2737,6 +2948,9 @@ elif bereich == "Einzelaudit":
                             audit["beobachtungen"][fid] = {"text": text, "ergebnis": ergebnis,
                                                            "abschnitt": nr,
                                                            "einwand": f.get("einwand", "")}
+        st.divider()
+        st.caption("Dieses Team arbeitet hier")
+        team_zeile(audit, "vorort")
 
     # ---------------- 5 Urteil (Check)
     if schritt == 5:
@@ -2858,6 +3072,7 @@ elif bereich == "Einzelaudit":
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("bericht")
+        team_zeile(audit, "bericht", "formuliert die Feststellungen, ohne sie einzustufen")
         if not audit.get("feststellungen"):
             st.info("Der Bericht entsteht, sobald Sie alle Zweifel beurteilt haben.")
         else:
@@ -2971,6 +3186,7 @@ elif bereich == "Einzelaudit":
         hilfe_l, hilfe_r = st.columns([5, 1])
         with hilfe_r:
             audix_hilfe("massnahmen")
+        team_zeile(audit, "massnahmen", "schlägt Ursachen und Massnahmen vor")
         if not audit.get("massnahmen"):
             st.info("Noch keine Massnahmen. Sie entstehen nach dem Festschreiben der Urteile.")
         else:
