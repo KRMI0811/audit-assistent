@@ -329,8 +329,14 @@ def verbindung_pruefen() -> list:
 
 def llm_text(modell: str, system: str, verlauf: list) -> str:
     """Freie Textantwort fuer den Chat. Gibt bei Fehlern eine lesbare Meldung zurueck."""
+    # Manche Dienste lehnen eine Anfrage mit mehreren Systemnachrichten ab. Deshalb wird
+    # alles Systemhafte zu einer einzigen Nachricht am Anfang zusammengefasst.
+    zusatz = [str(m.get("content", "")) for m in verlauf if m.get("role") == "system"]
+    gespraech = [m for m in verlauf if m.get("role") != "system"]
+    if zusatz:
+        system = system + "\n\n" + "\n\n".join(zusatz)
     nutzlast = {"model": modell, "temperature": 0.4, "max_tokens": 700, "stream": False,
-                "messages": [{"role": "system", "content": system}] + verlauf}
+                "messages": [{"role": "system", "content": system}] + gespraech}
     kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     try:
         r = requests.post(f"{API_BASE}/chat/completions", headers=kopf, json=nutzlast,
@@ -341,7 +347,7 @@ def llm_text(modell: str, system: str, verlauf: list) -> str:
         return f"Ich komme gerade nicht an mein Sprachmodell heran ({f})."
     if r.status_code != 200:
         return (f"Mein Sprachmodell antwortet nicht (HTTP {r.status_code}). "
-                "Bitte später erneut versuchen.")
+                + r.text[:300])
     inhalt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
     return inhalt or "Dazu fällt mir gerade nichts ein. Frag mich bitte anders."
 
@@ -415,10 +421,9 @@ def audix_antworten(frage: str, schluessel: str):
     """Haengt Frage und Antwort an den Chatverlauf dieser Phase."""
     verlauf = st.session_state.setdefault("audix_chat", {}).setdefault(schluessel, [])
     verlauf.append({"role": "user", "content": frage})
-    nachrichten = [{"role": "system", "content": "Arbeitsstand\n" + audix_kontext(schluessel)}]
-    nachrichten += verlauf[-8:]
+    anweisung = AUDIX_CHAT_SYSTEM + "\n\nArbeitsstand\n" + audix_kontext(schluessel)
     with st.spinner("Audix denkt nach"):
-        antwort = llm_text(MODEL_PRO, AUDIX_CHAT_SYSTEM, nachrichten)
+        antwort = llm_text(MODEL_PRO, anweisung, list(verlauf[-8:]))
     verlauf.append({"role": "assistant", "content": antwort})
 
 
