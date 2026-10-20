@@ -270,6 +270,63 @@ Deine Regeln
 5. Du schreibst auf Deutsch in Schweizer Rechtschreibung, also ss statt ß."""
 
 
+def verbindung_pruefen() -> list:
+    """Prueft Schluessel, Modellnamen und einen echten Aufruf. Gibt lesbare Befunde zurueck."""
+    if not API_KEY:
+        return [("fehler", "Es ist kein API-Schlüssel hinterlegt. Tragen Sie ihn in den "
+                           "Secrets der App ein, niemals in den Programmcode.")]
+    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    befunde = []
+    try:
+        liste = requests.get(f"{API_BASE}/models", headers=kopf, timeout=(10, 30))
+    except requests.RequestException as fehler:
+        return [("fehler", f"Die Adresse {API_BASE} ist nicht erreichbar. {fehler}")]
+
+    if liste.status_code in (401, 403):
+        return [("fehler", f"HTTP {liste.status_code}. Der Schlüssel wird abgelehnt. Er ist "
+                           "abgelaufen, gelöscht oder gehört zu einem anderen Konto. Erzeugen "
+                           "Sie beim Anbieter einen neuen Schlüssel und tragen Sie ihn in den "
+                           "Secrets ein.")]
+    if liste.status_code == 429:
+        return [("fehler", "HTTP 429. Das Kontingent ist aufgebraucht oder es kamen zu viele "
+                           "Anfragen in kurzer Zeit.")]
+
+    if liste.status_code == 200:
+        befunde.append(("gut", "Der Schlüssel wird angenommen."))
+        try:
+            vorhandene = [str(m.get("id")) for m in liste.json().get("data", [])]
+        except ValueError:
+            vorhandene = []
+        if vorhandene:
+            befunde.append(("info", "Verfügbare Modelle · " + ", ".join(vorhandene[:25])))
+            for rolle, modell in (("Konstruktionsmodell", MODEL_PRO),
+                                  ("Falsifikationsmodell", MODEL_CONTRA)):
+                if modell in vorhandene:
+                    befunde.append(("gut", f"{rolle} {modell} ist vorhanden."))
+                else:
+                    befunde.append(("fehler", f"{rolle} {modell} gibt es dort nicht mehr. "
+                                              "Tragen Sie in den Secrets einen Namen aus der "
+                                              "Liste oben ein."))
+    else:
+        befunde.append(("warn", f"Die Modelliste antwortet mit HTTP {liste.status_code}. Das "
+                                "muss kein Fehler sein, nicht jeder Anbieter bietet sie an."))
+
+    try:
+        probe = requests.post(
+            f"{API_BASE}/chat/completions", headers=kopf, timeout=(10, 60),
+            json={"model": MODEL_PRO, "max_tokens": 5, "stream": False,
+                  "messages": [{"role": "user", "content": "Antworte nur mit OK."}]})
+    except requests.RequestException as fehler:
+        befunde.append(("fehler", f"Der Testaufruf kam nicht durch. {fehler}"))
+        return befunde
+    if probe.status_code == 200:
+        befunde.append(("gut", "Der Testaufruf hat funktioniert, das Sprachmodell antwortet."))
+    else:
+        befunde.append(("fehler", f"Der Testaufruf antwortet mit HTTP {probe.status_code}. "
+                                  + probe.text[:300]))
+    return befunde
+
+
 def llm_text(modell: str, system: str, verlauf: list) -> str:
     """Freie Textantwort fuer den Chat. Gibt bei Fehlern eine lesbare Meldung zurueck."""
     nutzlast = {"model": modell, "temperature": 0.4, "max_tokens": 700, "stream": False,
@@ -2458,9 +2515,16 @@ with st.sidebar:
             st.session_state.begruesst = False
             st.rerun()
     with st.expander("Technik"):
-        st.caption(f"Konstruktionsmodell {MODEL_PRO}\n\nFalsifikationsmodell {MODEL_CONTRA}")
+        st.caption(f"Anbieter {PROVIDER or API_BASE}\n\nKonstruktionsmodell {MODEL_PRO}"
+                   f"\n\nFalsifikationsmodell {MODEL_CONTRA}")
         if not API_KEY:
             st.error("Kein API-Schlüssel in den Secrets hinterlegt.")
+        if st.button("Verbindung zum Sprachmodell prüfen", use_container_width=True):
+            anzeigen = {"gut": st.success, "fehler": st.error, "warn": st.warning,
+                        "info": st.caption}
+            with st.spinner("Verbindung wird geprüft"):
+                for art, text in verbindung_pruefen():
+                    anzeigen.get(art, st.caption)(text)
         # Zeigt, welche eigenen Figuren die App tatsächlich sieht. Das erspart das
         # Raten, wenn hochgeladene Bilder nicht erscheinen.
         gefunden = [n for n in ("team_pro", "team_contra") if bildpfad(n)]
