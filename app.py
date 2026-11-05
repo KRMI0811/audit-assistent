@@ -29,15 +29,29 @@ from pypdf import PdfReader
 APP_NAME = st.secrets.get("APP_NAME", "Audix")
 APP_CLAIM = st.secrets.get("APP_CLAIM", "Dein KI-Assistent für das interne Audit")
 ORGANISATION = st.secrets.get("ORGANISATION", "")
-API_BASE = str(st.secrets.get("API_BASE", "https://api.x.ai/v1")).rstrip("/")
+API_BASE = str(st.secrets.get("API_BASE", "https://api.anthropic.com/v1")).rstrip("/")
 API_KEY = str(st.secrets.get("API_KEY", "")).strip()
-PROVIDER = st.secrets.get("PROVIDER_NAME", "")
-MODEL_PRO = st.secrets.get("MODEL_PRO", "grok-4.3")
-MODEL_CONTRA = st.secrets.get("MODEL_CONTRA", "grok-4.20")
+PROVIDER = st.secrets.get("PROVIDER_NAME", "Claude API")
+MODEL_PRO = st.secrets.get("MODEL_PRO", "claude-sonnet-5-5")
+MODEL_CONTRA = st.secrets.get("MODEL_CONTRA", "claude-sonnet-5-5")
+# Die Claude API spricht die OpenAI-Schnittstelle mit, verlangt aber zusätzlich eigene
+# Kopfzeilen und kennt das Feld response_format nicht. Beides wird hier berücksichtigt,
+# damit dieselbe App ohne Codeänderung auch bei anderen Anbietern läuft.
+ANTHROPIC = "anthropic.com" in API_BASE
 TIMEOUT = float(st.secrets.get("TIMEOUT", 600))
 MAX_TOKENS = int(st.secrets.get("MAX_TOKENS", 3000))
 STREAM = bool(st.secrets.get("STREAM", True))
 MAX_ZEICHEN = int(st.secrets.get("MAX_ZEICHEN", 20000))
+
+
+def api_kopf() -> dict:
+    """Kopfzeilen der Anfrage. Für die Claude API kommen zwei eigene hinzu."""
+    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    if ANTHROPIC:
+        kopf["x-api-key"] = API_KEY
+        kopf["anthropic-version"] = "2023-06-01"
+    return kopf
+
 
 NORMEN_ORDNER = Path(__file__).parent / "normen"
 LOGO = Path(__file__).parent / "logo.png"
@@ -275,7 +289,7 @@ def verbindung_pruefen() -> list:
     if not API_KEY:
         return [("fehler", "Es ist kein API-Schlüssel hinterlegt. Tragen Sie ihn in den "
                            "Secrets der App ein, niemals in den Programmcode.")]
-    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    kopf = api_kopf()
     befunde = []
     try:
         liste = requests.get(f"{API_BASE}/models", headers=kopf, timeout=(10, 30))
@@ -323,7 +337,7 @@ def verbindung_pruefen() -> list:
         befunde.append(("gut", "Der Testaufruf hat funktioniert, das Sprachmodell antwortet."))
     else:
         befunde.append(("fehler", f"Der Testaufruf antwortet mit HTTP {probe.status_code}. "
-                                  + probe.text[:300]))
+                                  + probe.text[:700]))
     return befunde
 
 
@@ -337,7 +351,7 @@ def llm_text(modell: str, system: str, verlauf: list) -> str:
         system = system + "\n\n" + "\n\n".join(zusatz)
     nutzlast = {"model": modell, "temperature": 0.4, "max_tokens": 700, "stream": False,
                 "messages": [{"role": "system", "content": system}] + gespraech}
-    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    kopf = api_kopf()
     try:
         r = requests.post(f"{API_BASE}/chat/completions", headers=kopf, json=nutzlast,
                           timeout=(15, 180))
@@ -1112,10 +1126,13 @@ def llm_json(modell: str, system: str, nutzer: str, audit: dict, rolle: str = ""
                    "hebt sie nicht auf:\n" + zusatz)
     system = system + NORMREGEL + SPRACHREGEL + JSONREGEL
     basis = {"model": modell, "temperature": 0.2, "max_tokens": MAX_TOKENS, "stream": STREAM,
-             "response_format": {"type": "json_object"},
              "messages": [{"role": "system", "content": system},
                           {"role": "user", "content": nutzer}]}
-    kopf = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    if not ANTHROPIC:
+        # Die Claude API kennt dieses Feld nicht. Dort sorgen die Anweisungen an die
+        # Agenten und die Notbergung aus dem Text für sauberes JSON.
+        basis["response_format"] = {"type": "json_object"}
+    kopf = api_kopf()
     start = datetime.now()
 
     def senden(mit_format: bool):
