@@ -147,7 +147,7 @@ prüfen lassen. Sonst kenne ich sie nicht.""",
 
     "pruefung": """**Do. Jetzt arbeiten meine Teams gegeneinander.**
 
-**Was passiert, wenn du auf Prüfung starten klickst**
+**Was passiert, wenn du auf Durchführung starten klickst**
 1. Mein Vorbereitungsteam wählt die Normabschnitte, falls du das noch nicht getan hast.
 2. Das Konstruktionsteam baut je Abschnitt den bestmöglichen Konformitätsnachweis.
 3. Jedes eingesetzte Falsifikationsteam greift diesen Nachweis an.
@@ -392,7 +392,7 @@ def audix_kontext(schluessel: str) -> str:
     phasen = {"programm": "Auditprogramm des Jahres (Phase Plan)",
               "vorbereitung": "Auditvorbereitung und Auditteam (Phase Plan)",
               "durchfuehrung": "Nachweise zusammenstellen (Phase Plan)",
-              "pruefung": "Dialektische Prüfung durch die Agententeams (Phase Do)",
+              "pruefung": "Durchführung, Dokumentenprüfung durch die Agententeams (Phase Do)",
               "vorort": "Gesprächsleitfaden und Beobachtungen vor Ort (Phase Do)",
               "urteil": "Urteil des Auditors über die Zweifel (Phase Check)",
               "bericht": "Auditbericht (Phase Check)",
@@ -1027,7 +1027,8 @@ PHASEN = [
      [(1, "Vorbereitung", "Auditziel, Umfang, Normabschnitte und Auditteam festlegen."),
       (2, "Nachweise", "Unterlagen, Gesprächsnotizen und Leistungsdaten zusammenstellen.")]),
     ("Do", "#4a9d5f", "Das Audit durchführen und die Nachweise erheben.",
-     [(3, "Prüfung", "Die Agententeams bauen den Konformitätsnachweis und greifen ihn an."),
+     [(3, "Durchführung", "Die Agententeams bauen den Konformitätsnachweis aus Ihren "
+                          "Unterlagen und greifen ihn an."),
       (4, "Vor Ort", "Gespräch führen, beobachten, Stichproben ziehen und festhalten.")]),
     ("Check", "#d9a431", "Die Nachweise bewerten und das Ergebnis dokumentieren.",
      [(5, "Urteil", "Über jeden Zweifel entscheiden und die Entscheidung begründen."),
@@ -2739,7 +2740,7 @@ elif bereich == "Einzelaudit":
                    "Unterlagen, die Sie beim Fachbereich anfordern sollten.")
         if not audit.get("kriterien"):
             st.info("Noch keine Normabschnitte gewählt. Entweder oben auswählen oder unter Do "
-                    "bei der Prüfung vom System vorschlagen lassen.")
+                    "bei der Durchführung vom System vorschlagen lassen.")
         for nr in audit.get("kriterien", []):
             a = abschnitte.get(nr)
             if not a:
@@ -2854,7 +2855,7 @@ elif bereich == "Einzelaudit":
         if not quellen_sammeln(audit):
             st.warning("Bitte zuerst unter Plan bei der Aufgabe Nachweise Unterlagen erfassen.")
         else:
-            start = st.button("Prüfung starten", type="primary", use_container_width=True)
+            start = st.button("Durchführung starten", type="primary", use_container_width=True)
             if start:
                 balken = st.progress(0.0, text="Vorbereitung")
                 protokoll = st.empty()
@@ -2923,7 +2924,7 @@ elif bereich == "Einzelaudit":
                 s4.metric("Ihr Urteil offen", offen,
                           help="So viele Zweifel haben Sie noch nicht entschieden. Das "
                                "geschieht unter Check bei der Aufgabe Urteil.")
-                st.caption("Diese Prüfung beruht allein auf Unterlagen. Bei der Aufgabe Vor Ort "
+                st.caption("Diese Durchführung beruht allein auf Unterlagen. Bei der Aufgabe Vor Ort "
                            "mache ich aus jedem Zweifel eine Frage für das Gespräch, damit Sie "
                            "prüfen können, ob der Prozess auch gelebt wird.")
                 if k["zitate"] and k["zitate_belegt"] < k["zitate"]:
@@ -3001,25 +3002,12 @@ elif bereich == "Einzelaudit":
                                 + (", ".join(sorted(set(meine))) if meine
                                    else "noch nicht entschieden"))
 
-                            # ----- Handlungsempfehlung
-                            st.markdown("**Handlungsempfehlung**")
-                            schritte_vo = []
-                            for e in zweifel:
-                                v = e.get("pruefung_vor_ort")
-                                schritte_vo += v if isinstance(v, list) else ([v] if v else [])
-                            if schritte_vo:
-                                for i, v in enumerate(schritte_vo, start=1):
-                                    st.markdown(f"{i}. {v}")
-                            elif zweifel:
-                                st.markdown("Klären Sie die offenen Punkte im Gespräch vor Ort. "
-                                            "Bei der Aufgabe Vor Ort mache ich daraus Fragen.")
-                            else:
-                                st.markdown("Aus den Unterlagen ergibt sich kein Handlungsbedarf.")
-                            for r in risiken:
-                                klass = str(r.get("klassifizierung", ""))
-                                zr = risiko_zeichen.get(klass.lower(), "⚪")
-                                st.markdown(f"Im externen Audit · {zr} {klass} · "
-                                            f"{r.get('konsequenz', '')}")
+                            # Hier endet die Durchführung. Was aus dem Befund folgt, gehört
+                            # nicht in diesen Schritt, sondern in Vor Ort und ins Urteil.
+                            if zweifel:
+                                st.caption("Was daraus für das Gespräch folgt, bereite ich bei "
+                                           "der Aufgabe Vor Ort auf. Entschieden wird unter "
+                                           "Check bei der Aufgabe Urteil.")
 
                             # ----- Alles Weitere nur auf Wunsch. Ein Aufklappfeld im
                             # Aufklappfeld ist in Streamlit nicht möglich, daher ein Schalter.
@@ -3064,11 +3052,15 @@ elif bereich == "Einzelaudit":
                                                        "Kein Gegenbeleg. Der Zweifel stützt "
                                                        "sich auf das Fehlen eines Nachweises.")
                                 for r in risiken:
-                                    st.caption(f"Prognose externes Audit · "
-                                               f"{r.get('prognose', '')} · Dringlichkeit "
+                                    klass = str(r.get("klassifizierung", ""))
+                                    zr = risiko_zeichen.get(klass.lower(), "⚪")
+                                    st.caption(f"Prognose externes Audit · {zr} {klass} · "
+                                               f"{r.get('prognose', '')} · "
+                                               f"{r.get('konsequenz', '')} · Dringlichkeit "
                                                f"{r.get('dringlichkeit', '')}")
-                                st.caption("Die Prognose stammt vom System und bindet keine "
-                                           "Zertifizierungsstelle.")
+                                if risiken:
+                                    st.caption("Die Prognose stammt vom System und bindet keine "
+                                               "Zertifizierungsstelle.")
                     if st.button(f"Abschnitt {nr} erneut prüfen", key=f"rm_{nr}"):
                         del audit["analysen"][nr]
                         st.rerun()
@@ -3096,7 +3088,7 @@ elif bereich == "Einzelaudit":
                    "Merkmale, an denen Sie erkennen, ob der Prozess tatsächlich gelebt wird. "
                    "Das Hinschauen bleibt Ihre Aufgabe, ich bereite es nur vor.")
         if not audit.get("analysen"):
-            st.info("Bearbeiten Sie zuerst die Aufgabe Prüfung für mindestens einen Normabschnitt. "
+            st.info("Bearbeiten Sie zuerst die Aufgabe Durchführung für mindestens einen Normabschnitt. "
                     "Die Fragen entstehen aus den Zweifeln dieser Prüfung.")
         else:
             audit.setdefault("beobachtungen", {})
@@ -3130,6 +3122,27 @@ elif bereich == "Einzelaudit":
                 st.caption("Nehmen Sie den Leitfaden mit in den Termin. Was Sie dort feststellen, "
                            "tragen Sie hier ein. Es erscheint beim passenden Zweifel unter "
                            "Check bei der Aufgabe Urteil und im Auditbericht als objektiver Nachweis.")
+
+            # Was die Durchführung je Abschnitt schon vorgemerkt hat, steht hier und nicht
+            # mehr im vorigen Schritt. Dort gehört nur der Befund hin.
+            vorgemerkt = {}
+            for nr_a, erg_a in audit.get("analysen", {}).items():
+                if nr_a in audit.get("leitfaden", {}):
+                    continue
+                punkte = []
+                for e in erg_a.get("einwaende", {}).get("einwaende", []):
+                    v = e.get("pruefung_vor_ort")
+                    punkte += v if isinstance(v, list) else ([v] if v else [])
+                if punkte:
+                    vorgemerkt[nr_a] = punkte
+            if vorgemerkt:
+                with st.expander("Was die Durchführung bereits vorgemerkt hat"):
+                    st.caption("Rohe Hinweise aus der Dokumentenprüfung. Der Knopf oben macht "
+                               "daraus ausformulierte Fragen mit Stichprobe und Merkmalen.")
+                    for nr_a in sorted(vorgemerkt):
+                        st.markdown(f"**Abschnitt {nr_a}**")
+                        for punkt in vorgemerkt[nr_a]:
+                            st.markdown(f"- {punkt}")
 
             for nr in sorted(audit.get("leitfaden", {})):
                 block = audit["leitfaden"][nr]
