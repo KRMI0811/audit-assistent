@@ -284,6 +284,27 @@ Deine Regeln
 5. Du schreibst auf Deutsch in Schweizer Rechtschreibung, also ss statt ß."""
 
 
+def umlaute_reparieren(wert):
+    """Repariert Text, der einmal falsch als Latin-1 gelesen wurde.
+
+    Frühere Läufe haben Umlaute verstümmelt gespeichert, etwa BerÃ¼cksichtigung statt
+    Berücksichtigung. Beim Laden eines alten Arbeitsstands wird das hier zurückgedreht.
+    Angefasst wird nur Text, der die typischen Spuren trägt und sich sauber
+    zurückrechnen lässt. Alles andere bleibt unverändert.
+    """
+    if isinstance(wert, dict):
+        return {k: umlaute_reparieren(v) for k, v in wert.items()}
+    if isinstance(wert, list):
+        return [umlaute_reparieren(v) for v in wert]
+    if not isinstance(wert, str) or not any(z in wert for z in ("Ã", "Â", "â")):
+        return wert
+    try:
+        geheilt = wert.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return wert
+    return geheilt if not any(z in geheilt for z in ("Ã", "Â")) else wert
+
+
 def verbindung_pruefen() -> list:
     """Prueft Schluessel, Modellnamen und einen echten Aufruf. Gibt lesbare Befunde zurueck."""
     if not API_KEY:
@@ -1160,6 +1181,9 @@ def llm_json(modell: str, system: str, nutzer: str, audit: dict, rolle: str = ""
 
     if STREAM:
         teile = []
+        # Ohne diese Zeile raet requests die Kodierung und faellt bei einem Datenstrom
+        # auf Latin-1 zurueck. Aus Berücksichtigung wird dann BerÃ¼cksichtigung.
+        r.encoding = "utf-8"
         try:
             for zeile in r.iter_lines(decode_unicode=True):
                 if not zeile or not zeile.startswith("data:"):
@@ -2527,7 +2551,8 @@ with st.sidebar:
         wieder = st.file_uploader("Arbeitsstand laden", type=["json"], key="restore")
         if wieder is not None and st.button("Übernehmen", use_container_width=True):
             try:
-                st.session_state.audits = json.loads(wieder.getvalue().decode("utf-8"))
+                st.session_state.audits = umlaute_reparieren(
+                    json.loads(wieder.getvalue().decode("utf-8")))
                 st.rerun()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 st.error("Die Datei konnte nicht gelesen werden.")
