@@ -2609,6 +2609,10 @@ if bereich == "Auditprogramm":
         auditierte = s2.text_input("Auditierte Funktion")
         termin = s3.date_input("Geplanter Termin", date.today())
         norm = st.selectbox("Norm", list(kataloge))
+        # Sagt offen, welchen Stand der hinterlegte Katalog abbildet. Sonst wundert man
+        # sich, warum nach dem Klimawandel gefragt wird, obwohl 2015 dasteht.
+        if kataloge[norm].get("hinweis"):
+            st.caption(f"Katalogstand · {kataloge[norm]['hinweis']}")
         liste = {f"{a['nr']} {a['titel']}": a["nr"] for a in kataloge[norm]["abschnitte"]}
         wahl = st.multiselect("Zu prüfende Normabschnitte (leer lassen, wenn das System "
                               "sie anhand der Nachweise vorschlagen soll)", list(liste))
@@ -2889,14 +2893,39 @@ elif bereich == "Einzelaudit":
                     st.error(str(f))
 
             if audit.get("analysen"):
+                offen = k["einwaende"] - k["beurteilt"]
+                # Ein Satz in Klartext, darunter erst die Zahlen. Wer die Anwendung zum
+                # ersten Mal sieht, soll das Ergebnis lesen können, ohne es zu deuten.
+                satz = (f"Audix hat {k['abschnitte']} "
+                        + ("Normabschnitt" if k["abschnitte"] == 1 else "Normabschnitte")
+                        + f" geprüft und dabei {k['einwaende']} "
+                        + ("Zweifel" if k["einwaende"] == 1 else "Zweifel")
+                        + " am Nachweis gefunden. ")
+                if k["zitate"] and k["zitate_belegt"] == k["zitate"]:
+                    satz += (f"Alle {k['zitate']} angeführten Zitate stehen wörtlich in Ihren "
+                             "Unterlagen. ")
+                elif k["zitate"]:
+                    satz += (f"{k['zitate'] - k['zitate_belegt']} von {k['zitate']} Zitaten "
+                             "stehen so nicht in Ihren Unterlagen. ")
+                satz += ("1 davon wartet noch auf Ihr Urteil." if offen == 1
+                         else f"{offen} davon warten noch auf Ihr Urteil." if offen
+                         else "Sie haben über alle entschieden.")
+                st.markdown(satz)
                 s1, s2, s3, s4 = st.columns(4)
-                s1.metric("Geprüfte Abschnitte", k["abschnitte"])
-                s2.metric("Gefundene Zweifel", k["einwaende"])
-                s3.metric("Zitate belegt", f"{k['zitate_belegt']} / {k['zitate']}")
-                s4.metric("Noch zu beurteilen", k["einwaende"] - k["beurteilt"])
-                st.caption("Diese Prüfung beruht allein auf Unterlagen. Bei der Aufgabe Vor Ort mache "
-                           "ich aus jedem Zweifel eine Frage für das Gespräch, damit Sie prüfen "
-                           "können, ob der Prozess auch gelebt wird.")
+                s1.metric("Normabschnitte", k["abschnitte"],
+                          help="So viele Abschnitte der Norm wurden bisher geprüft.")
+                s2.metric("Zweifel am Nachweis", k["einwaende"],
+                          help="Begründete Einwände des Falsifikationsteams gegen den "
+                               "Konformitätsnachweis. Ein Zweifel ist noch keine Abweichung.")
+                s3.metric("Zitate belegt", f"{k['zitate_belegt']} von {k['zitate']}",
+                          help="Jedes Zitat wird maschinell im Originaldokument gesucht. "
+                               "Was hier fehlt, ist eine Aussage ohne schriftlichen Beleg.")
+                s4.metric("Ihr Urteil offen", offen,
+                          help="So viele Zweifel haben Sie noch nicht entschieden. Das "
+                               "geschieht unter Check bei der Aufgabe Urteil.")
+                st.caption("Diese Prüfung beruht allein auf Unterlagen. Bei der Aufgabe Vor Ort "
+                           "mache ich aus jedem Zweifel eine Frage für das Gespräch, damit Sie "
+                           "prüfen können, ob der Prozess auch gelebt wird.")
                 if k["zitate"] and k["zitate_belegt"] < k["zitate"]:
                     st.warning(f"{k['zitate'] - k['zitate_belegt']} Zitate wurden in Ihren "
                                "Unterlagen nicht wiedergefunden. Diese Nachweise sind nicht "
@@ -2917,7 +2946,7 @@ elif bereich == "Einzelaudit":
                 zeichen, lage = ampel_abschnitt(erg, urteile)
                 with st.container(border=True):
                     st.markdown(f"## {zeichen} Abschnitt {nr} {erg.get('titel', '')}")
-                    st.markdown("**1 Normforderung (Soll-Zustand)**")
+                    st.markdown("**Normforderung**")
                     st.write(erg.get("anforderung", ""))
                     st.markdown(f"**Gesamtbefund des Systems** · {zeichen} {lage}")
                     st.caption("Befund des Systems auf Basis der Unterlagen. Die Feststellung "
@@ -2946,79 +2975,34 @@ elif bereich == "Einzelaudit":
                         zweifel = [e for e in einwaende_abschnitt if e.get("ziel") == t.get("id")]
                         titel = t.get("pruefpunkt") or t.get("aussage") or t.get("id")
                         with st.expander(f"{z} Prüfpunkt · {titel}", expanded=False):
-
-                            st.markdown("**2 Audit-Befund und Status**")
                             meine = [urteile.get(e["id"], {}).get("urteil") for e in zweifel]
                             meine = [m for m in meine if m]
                             belegte = sum(1 for n in t.get("nachweise", [])
                                           if n.get("verifiziert"))
-                            st.markdown(
-                                f"- System-Befund · {z} {kurz}\n"
-                                f"- Datenbasis · {belegte} von {len(t.get('nachweise', []))} "
-                                f"Zitaten in den Unterlagen gefunden, {len(zweifel)} begründete "
-                                f"Zweifel, {len(t.get('annahmen', []))} Behauptungen ohne Nachweis\n"
-                                f"- Ihr Urteil · "
+                            risiken = [e.get("zertifizierungsrisiko") for e in zweifel
+                                       if isinstance(e.get("zertifizierungsrisiko"), dict)]
+
+                            # ----- Prüfungsergebnis, kurz und ohne Wiederholungen
+                            st.markdown(f"**Prüfungsergebnis** · {z} {kurz}")
+                            if t.get("aussage"):
+                                st.markdown(f"Die Unterlagen zeigen · {t['aussage']}")
+                            if zweifel:
+                                st.markdown("Offen bleibt")
+                                for e in zweifel:
+                                    st.markdown(f"- {e.get('begruendung', '')}")
+                            else:
+                                st.markdown("Offen bleibt · nichts, kein Team hat diesen "
+                                            "Prüfpunkt angegriffen.")
+                            st.caption(
+                                f"Beleglage · {belegte} von {len(t.get('nachweise', []))} "
+                                "Zitaten wörtlich in den Unterlagen gefunden · "
+                                f"{len(t.get('annahmen', []))} Aussagen ohne Beleg · "
+                                "Ihr Urteil · "
                                 + (", ".join(sorted(set(meine))) if meine
                                    else "noch nicht entschieden"))
 
-                            st.markdown("**3 Analyse und Argumentation (Ist-Zustand)**")
-                            st.markdown(f"*Sichtweise {agent_name(audit, 'pro')}*")
-                            st.write(t.get("aussage", ""))
-                            if t.get("argument"):
-                                st.caption(t["argument"])
-                            st.markdown(f"*Sichtweise {agent_name(audit, 'contra')}*")
-                            if zweifel:
-                                for e in zweifel:
-                                    st.write(e.get("begruendung", ""))
-                                    kurz_e = (erwid.get(e["id"].split("-", 1)[-1])
-                                              or erwid.get(e["id"]))
-                                    if kurz_e:
-                                        st.caption(
-                                            f"Erwiderung {agent_name(audit, 'erwiderung')} · "
-                                            + ("zugestanden · " if kurz_e.get("zugestanden")
-                                               else "") + str(kurz_e.get("erwiderung", "")))
-                            else:
-                                st.write("Kein Widerspruch gegen diesen Prüfpunkt.")
-
-                            st.markdown("**4 Dokumentenprüfung (die Beweise)**")
-                            if not t.get("nachweise"):
-                                st.markdown("- Kein Dokument eingereicht, das diesen Prüfpunkt "
-                                            "belegt. Das ist der Grund für die rote Ampel.")
-                            for n in t.get("nachweise", []):
-                                if n.get("verifiziert"):
-                                    st.markdown(
-                                        f"- Dokument · **{n.get('dokument', '')}**  \n"
-                                        f"  Status · 🟢 verwendbar  \n"
-                                        f"  Zitat · {n.get('zitat', '')}")
-                                else:
-                                    st.markdown(
-                                        f"- Dokument · **{n.get('dokument', '')}**  \n"
-                                        f"  Status · 🔴 nicht verwendbar  \n"
-                                        f"  Grund · Das zitierte Textstück wurde im Dokument "
-                                        f"nicht gefunden. Es gibt dafür keinen schriftlichen "
-                                        f"Nachweis.")
-                            for a in t.get("annahmen", []):
-                                st.markdown(f"- Behauptung ohne Nachweis · {a}")
-
-                            st.markdown("**5 Audit-Zweifel (Risikoanalyse der Unterlagen)**")
-                            if not zweifel:
-                                st.markdown("- Keine.")
-                            for e in zweifel:
-                                schwere = {"hoch": "🔴 hoch", "mittel": "🟡 mittel",
-                                           "gering": "🟢 gering"}.get(e.get("schwere"),
-                                                                     e.get("schwere", ""))
-                                st.markdown(
-                                    f"- ID · `{e.get('id')}`  \n"
-                                    + (f"  Erhoben von · {e['team']}  \n"
-                                       if e.get("team") else "")
-                                    + f"  Art · {TYPEN.get(e.get('typ'), e.get('typ'))}  \n"
-                                    f"  Schweregrad · {schwere}  \n"
-                                    f"  Begründung · {e.get('begruendung', '')}")
-                                nachweise_anzeigen(e.get("nachweise"),
-                                                   "Kein Gegenbeleg. Der Zweifel stützt sich "
-                                                   "auf das Fehlen eines Nachweises.")
-
-                            st.markdown("**6 Empfehlung für die Prüfung vor Ort**")
+                            # ----- Handlungsempfehlung
+                            st.markdown("**Handlungsempfehlung**")
                             schritte_vo = []
                             for e in zweifel:
                                 v = e.get("pruefung_vor_ort")
@@ -3026,25 +3010,65 @@ elif bereich == "Einzelaudit":
                             if schritte_vo:
                                 for i, v in enumerate(schritte_vo, start=1):
                                     st.markdown(f"{i}. {v}")
+                            elif zweifel:
+                                st.markdown("Klären Sie die offenen Punkte im Gespräch vor Ort. "
+                                            "Bei der Aufgabe Vor Ort mache ich daraus Fragen.")
                             else:
-                                st.markdown("Keine besondere Prüfung vorgeschlagen.")
-
-                            st.markdown("**7 Risiko im externen Zertifizierungsaudit**")
-                            risiken = [e.get("zertifizierungsrisiko") for e in zweifel
-                                       if isinstance(e.get("zertifizierungsrisiko"), dict)]
-                            if not risiken:
-                                st.caption("Das Falsifikationsteam hat dazu nichts geliefert. "
-                                           "Schätzen Sie es im Urteil selbst ein.")
+                                st.markdown("Aus den Unterlagen ergibt sich kein Handlungsbedarf.")
                             for r in risiken:
                                 klass = str(r.get("klassifizierung", ""))
                                 zr = risiko_zeichen.get(klass.lower(), "⚪")
-                                st.markdown(
-                                    f"- Klassifizierung · {zr} {klass}  \n"
-                                    f"  Prognose · {r.get('prognose', '')}  \n"
-                                    f"  Konsequenz · {r.get('konsequenz', '')}  \n"
-                                    f"  Dringlichkeit · {r.get('dringlichkeit', '')}")
-                            st.caption("Diese Einschätzung ist eine Prognose des Systems und "
-                                       "bindet keine Zertifizierungsstelle.")
+                                st.markdown(f"Im externen Audit · {zr} {klass} · "
+                                            f"{r.get('konsequenz', '')}")
+
+                            # ----- Alles Weitere nur auf Wunsch. Ein Aufklappfeld im
+                            # Aufklappfeld ist in Streamlit nicht möglich, daher ein Schalter.
+                            if st.toggle("Begründung und Belege im Detail", key=f"det_{t.get('id')}_{nr}"):
+                                if t.get("argument"):
+                                    st.markdown(f"**Argument des {agent_name(audit, 'pro')}s** · "
+                                                f"{t['argument']}")
+                                st.markdown("**Herangezogene Dokumente**")
+                                if not t.get("nachweise"):
+                                    st.markdown("- Kein Dokument eingereicht, das diesen "
+                                                "Prüfpunkt belegt.")
+                                for n in t.get("nachweise", []):
+                                    if n.get("verifiziert"):
+                                        st.markdown(f"- 🟢 **{n.get('dokument', '')}** · "
+                                                    f"{n.get('zitat', '')}")
+                                    else:
+                                        st.markdown(
+                                            f"- 🔴 **{n.get('dokument', '')}** · das zitierte "
+                                            "Textstück wurde dort nicht gefunden, es gibt "
+                                            "dafür keinen schriftlichen Nachweis.")
+                                for a in t.get("annahmen", []):
+                                    st.markdown(f"- ⚪ ohne Beleg · {a}")
+
+                                if zweifel:
+                                    st.markdown("**Die Zweifel im Einzelnen**")
+                                for e in zweifel:
+                                    schwere = {"hoch": "🔴 hoch", "mittel": "🟡 mittel",
+                                               "gering": "🟢 gering"}.get(
+                                                   e.get("schwere"), e.get("schwere", ""))
+                                    st.markdown(
+                                        f"- `{e.get('id')}` · {schwere} · "
+                                        f"{TYPEN.get(e.get('typ'), e.get('typ'))}"
+                                        + (f" · erhoben von {e['team']}" if e.get("team") else ""))
+                                    kurz_e = (erwid.get(e["id"].split("-", 1)[-1])
+                                              or erwid.get(e["id"]))
+                                    if kurz_e:
+                                        st.caption(
+                                            f"{agent_name(audit, 'erwiderung')} · "
+                                            + ("zugestanden · " if kurz_e.get("zugestanden")
+                                               else "") + str(kurz_e.get("erwiderung", "")))
+                                    nachweise_anzeigen(e.get("nachweise"),
+                                                       "Kein Gegenbeleg. Der Zweifel stützt "
+                                                       "sich auf das Fehlen eines Nachweises.")
+                                for r in risiken:
+                                    st.caption(f"Prognose externes Audit · "
+                                               f"{r.get('prognose', '')} · Dringlichkeit "
+                                               f"{r.get('dringlichkeit', '')}")
+                                st.caption("Die Prognose stammt vom System und bindet keine "
+                                           "Zertifizierungsstelle.")
                     if st.button(f"Abschnitt {nr} erneut prüfen", key=f"rm_{nr}"):
                         del audit["analysen"][nr]
                         st.rerun()
